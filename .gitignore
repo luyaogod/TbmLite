@@ -1,0 +1,10 @@
+node_modules
+dist
+dist-electron
+release
+*.log
+.DS_Store
+electron/app-data/dev/db
+electron/app-data/dev/files
+electron/app-data/dev/logs
+electron/app-data/dev/config/chat-sessions
