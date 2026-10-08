@@ -170,6 +170,12 @@ interface Window {
       preview(dir: string): Promise<LegacyPreviewView>;
       import(dir: string): Promise<LegacyImportReportView>;
     };
+    export: {
+      dingtalkTemplate(
+        items: Array<{ seq?: string; description?: string; jobCode?: string; jobName?: string; hours?: number | string }>,
+        options?: { fileName?: string; project?: string; requirement?: string; silentTarget?: string },
+      ): Promise<{ ok: boolean; canceled?: boolean; filePath?: string; rowCount?: number; sizeBytes?: number }>;
+    };
     data: {
       health(check?: boolean): Promise<DataHealthView>;
       checkIntegrity(): Promise<{ check: DatabaseCheckView; issues: IntegrityIssueView[] }>;

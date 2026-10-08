@@ -16,6 +16,7 @@ import {
   previewLegacyImport,
 } from "./services/legacy-import";
 import { readMeta } from "./core/meta";
+import { defaultFileName as dingtalkFileName, writeDingtalkTemplate, type DingtalkExportItem } from "./services/dingtalk-export";
 import { pathManager, type DataSubDir } from "./utils/paths";
 import logger from "./utils/logger";
 
@@ -211,6 +212,42 @@ export function registerHandlers(getWin: WinGetter): void {
     }
     return report;
   });
+
+  // ── 导出钉钉导入模板 ────────────────────────────────
+
+  ipcMain.handle(
+    "export:dingtalk-template",
+    async (
+      _event,
+      items: DingtalkExportItem[],
+      options?: { fileName?: string; project?: string; requirement?: string; silentTarget?: string },
+    ) => {
+      if (!Array.isArray(items) || items.length === 0) {
+        throw new Error("没有可导出的需求明细");
+      }
+      const suggested = options?.fileName ?? dingtalkFileName({ project: options?.project, requirement: options?.requirement });
+
+      // silentTarget 供自检/自动化使用，不经过保存对话框
+      let target = options?.silentTarget ?? null;
+      if (!target) {
+        const parent = getWin();
+        const dialogOptions = {
+          title: "导出钉钉导入模板",
+          defaultPath: suggested,
+          filters: [{ name: "Excel 工作簿", extensions: ["xlsx"] }],
+        };
+        const result = parent
+          ? await dialog.showSaveDialog(parent, dialogOptions)
+          : await dialog.showSaveDialog(dialogOptions);
+        if (result.canceled || !result.filePath) return { ok: false as const, canceled: true };
+        target = result.filePath;
+      }
+
+      const exported = await writeDingtalkTemplate(items, target);
+      if (!options?.silentTarget) shell.showItemInFolder(exported.filePath);
+      return { ok: true as const, ...exported };
+    },
+  );
 
   // ── 备份 ──────────────────────────────────────────────
 

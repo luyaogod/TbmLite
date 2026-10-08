@@ -172,6 +172,16 @@ contextBridge.exposeInMainWorld("api", {
     },
   },
 
+  export: {
+    /** 导出钉钉需求评估导入模板；silentTarget 仅供自检使用 */
+    dingtalkTemplate(
+      items: Array<{ seq?: string; description?: string; jobCode?: string; jobName?: string; hours?: number | string }>,
+      options?: { fileName?: string; project?: string; requirement?: string; silentTarget?: string },
+    ) {
+      return ipcRenderer.invoke("export:dingtalk-template", items, options);
+    },
+  },
+
   data: {
     health(check?: boolean) {
       return ipcRenderer.invoke("data:health", check);

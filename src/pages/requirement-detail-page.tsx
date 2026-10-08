@@ -8,6 +8,7 @@ import {
   Check,
   Download,
   ExternalLink,
+  FileDown,
   FileUp,
   Loader2,
   Paperclip,
@@ -104,6 +105,7 @@ export function RequirementDetailPage() {
   const [dirty, setDirty] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [deletingAttachment, setDeletingAttachment] = useState<AttachmentRow | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -270,6 +272,33 @@ export function RequirementDetailPage() {
   };
 
   // ── 附件 ─────────────────────────────────────────────
+
+  /** 导出钉钉需求评估导入模板（按当前明细，含未保存的修改） */
+  const exportDingtalk = async () => {
+    if (items.length === 0) {
+      toast.warning("没有可导出的需求明细");
+      return;
+    }
+    setExporting(true);
+    try {
+      const result = await window.api.export.dingtalkTemplate(
+        items.map((item) => ({
+          seq: item.seq,
+          description: item.description,
+          jobCode: item.jobCode,
+          jobName: item.jobName,
+          hours: item.hours,
+        })),
+        { project: pj, requirement: req },
+      );
+      if (result.ok) toast.success(`已导出 ${result.rowCount} 条明细分`);
+      else if (!result.canceled) toast.error("导出失败");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "导出失败");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleAttachmentFile = async (file: File) => {
     setUploading(true);
@@ -491,6 +520,14 @@ export function RequirementDetailPage() {
               ) : null}
             </div>
             <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => void exportDingtalk()}
+                disabled={items.length === 0 || exporting}
+              >
+                {exporting ? <Loader2 className="animate-spin" /> : <FileDown />} 导出钉钉模板
+              </Button>
               {dirty ? (
                 <Button variant="ghost" size="xs" onClick={() => void discardChanges()}>
                   <Check /> 放弃修改

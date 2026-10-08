@@ -12,8 +12,15 @@ import { scanIssues } from "./core/integrity";
 import { backupService, applyPendingRestore, createBackupNow } from "./services/backup-service";
 import { getHealth } from "./services/data-service";
 import { detectLegacySources, importLegacyData, previewLegacyImport } from "./services/legacy-import";
+import {
+  buildDingtalkWorkbook,
+  defaultFileName as dingtalkFileName,
+  setResourceRoot,
+  templateFilePath,
+} from "./services/dingtalk-export";
+import { requirementService } from "./services/requirement-service";
 import { pathManager } from "./utils/paths";
-import { writeJsonAtomic } from "./utils/fsx";
+import { writeFileAtomic, writeJsonAtomic } from "./utils/fsx";
 import logger from "./utils/logger";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,6 +44,8 @@ const isSmokeTest = process.argv.includes("--tbm-smoke");
 const isRestoreSmoke = process.argv.includes("--tbm-smoke-restore");
 /** 自检扩展：额外跑一次旧数据导入（目录取 TBM_LEGACY_DIR 或自动探测） */
 const isLegacySmoke = process.argv.includes("--tbm-smoke-legacy");
+/** 自检扩展：额外导出一次钉钉模板（验证模板解析 + jszip 打包可用） */
+const isExportSmoke = process.argv.includes("--tbm-smoke-export");
 
 // ── 窗口 ────────────────────────────────────────────────
 
@@ -223,6 +232,42 @@ async function runSmokeTest(): Promise<void> {
       }
     }
 
+    let dingtalk: unknown = null;
+    if (prepared && isExportSmoke) {
+      const requirements = await requirementService.listRequirements();
+      // 取明细最多的一份需求书，覆盖面最大
+      let bestRequirement = requirements[0];
+      let targetItems: Awaited<ReturnType<typeof requirementService.listItems>> = [];
+      for (const requirement of requirements) {
+        const rows = await requirementService.listItems(requirement.xqaapj, requirement.xqaa001);
+        if (rows.length > targetItems.length) {
+          bestRequirement = requirement;
+          targetItems = rows;
+        }
+      }
+      const first = bestRequirement;
+      const items = targetItems;
+      const buffer = await buildDingtalkWorkbook(
+        items.map((item) => ({
+          seq: item.xqabseq,
+          description: item.xqab002,
+          jobCode: item.xqab003,
+          jobName: item.xqab007,
+          hours: item.xqab004,
+        })),
+      );
+      const target = path.join(pathManager.getTmpPath(), "dingtalk-smoke.xlsx");
+      writeFileAtomic(target, buffer);
+      dingtalk = {
+        template: templateFilePath(),
+        defaultFileName: first ? dingtalkFileName({ project: first.xqaapj, requirement: first.xqaa001 }) : null,
+        sourceRequirement: first ? `${first.xqaapj}|${first.xqaa001}` : null,
+        rowCount: items.length,
+        sizeBytes: buffer.length,
+        output: target,
+      };
+    }
+
     const report = {
       prepared,
       dataRoot: pathManager.getRoot(),
@@ -232,6 +277,7 @@ async function runSmokeTest(): Promise<void> {
       issues,
       restoreRoundTrip,
       legacy,
+      dingtalk,
     };
     process.stdout.write(`SMOKE_REPORT ${JSON.stringify(report, null, 2)}\n`);
     // Windows GUI 子系统进程的 stdout 不接到控制台，因此同时落盘一份，便于打包后验证
@@ -272,6 +318,7 @@ function onBeforeQuit(event: Electron.Event): void {
 function startApp(): void {
   // 数据根目录必须在 ready 之前确定（便携模式需要 setPath("userData")）
   pathManager.init();
+  setResourceRoot(process.resourcesPath ?? process.env.APP_ROOT ?? "");
   for (const note of pathManager.notes()) logger.warn({ note }, "数据目录调整");
 
   app.on("second-instance", () => {

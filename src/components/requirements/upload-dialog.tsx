@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { FileUp, Loader2, Pencil, Plus, Trash2, Check } from "lucide-react";
+import { FileDown, FileUp, Loader2, Pencil, Plus, Trash2, Check } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -81,6 +81,7 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
   const [docxPath, setDocxPath] = useState<string | null>(null);
   const [docxName, setDocxName] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -174,6 +175,36 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
     if (parsing || !files || files.length === 0) return;
     if (files.length > 1) toast.warning("一次只能解析一个文件，已使用第一个");
     void handleParseFile(files[0]);
+  };
+
+  /** 导出钉钉需求评估导入模板（按当前明细，含未保存的修改） */
+  const exportDingtalk = async () => {
+    if (items.length === 0) {
+      toast.warning("没有可导出的需求明细");
+      return;
+    }
+    setExporting(true);
+    try {
+      const result = await window.api.export.dingtalkTemplate(
+        items.map((item) => ({
+          seq: item.seq,
+          description: item.description,
+          jobCode: item.jobCode,
+          jobName: item.jobName,
+          hours: item.hours,
+        })),
+        {
+          project: form.getValues("xqaapj"),
+          requirement: form.getValues("xqaa001"),
+        },
+      );
+      if (result.ok) toast.success(`已导出 ${result.rowCount} 条明细分`);
+      else if (!result.canceled) toast.error("导出失败");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "导出失败");
+    } finally {
+      setExporting(false);
+    }
   };
 
   const updateItem = (key: number, field: keyof ItemDraft, value: unknown) => {
@@ -438,6 +469,15 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
                 <Badge variant="secondary">{items.length}</Badge>
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  onClick={() => void exportDingtalk()}
+                  disabled={items.length === 0 || exporting}
+                >
+                  {exporting ? <Loader2 className="animate-spin" /> : <FileDown />} 导出钉钉模板
+                </Button>
                 <Button type="button" variant="outline" size="xs" onClick={addItem}>
                   <Plus /> 新增行
                 </Button>

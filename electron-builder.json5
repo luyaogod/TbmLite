@@ -22,6 +22,11 @@
     {
       "from": "electron/app-data/publish",
       "to": "publish"
+    },
+    // 钉钉「需求评估导入模板」底稿（导出时以它为底，保留隐藏选项表与数据校验）
+    {
+      "from": "templates",
+      "to": "templates"
     }
   ],
   "win": {
