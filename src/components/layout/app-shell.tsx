@@ -88,15 +88,11 @@ export function AppShell() {
 
   return (
     <div ref={shellRef} className="flex h-screen w-full flex-col overflow-hidden bg-background">
-      {frameless ? <div className="titlebar-drag h-10 shrink-0 border-b bg-background" /> : null}
+      {frameless ? <div className="titlebar-drag h-8 shrink-0 border-b bg-background" /> : null}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* 侧边导航 */}
         <aside className="flex w-56 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
-          <div className="titlebar-drag flex h-14 items-center border-b px-4">
-            <img src="logo.svg" alt="TBM" className="size-6 rounded-[5px]" draggable={false} />
-          </div>
-
           <nav className="flex flex-1 flex-col gap-1 p-2">
             {navItems.map(({ to, label }) => (
               <NavLink

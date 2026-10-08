@@ -20,6 +20,7 @@ import {
 } from "./services/dingtalk-export";
 import { requirementService } from "./services/requirement-service";
 import { pathManager } from "./utils/paths";
+import { TITLEBAR_HEIGHT } from "./core/window-chrome";
 import { writeFileAtomic, writeJsonAtomic } from "./utils/fsx";
 import logger from "./utils/logger";
 
@@ -39,8 +40,7 @@ let win: BrowserWindow | null = null;
 let quitting = false;
 
 /** 无边框窗口（Windows）：去掉系统标题栏的图标与文字，仅保留窗口按钮
- *  顶部 40px 由渲染层留出可拖拽标题带 */
-const TITLEBAR_HEIGHT = 40;
+ *  顶部 TITLEBAR_HEIGHT 由渲染层留出可拖拽标题带 */
 const FRAMELESS = process.platform === "win32";
 if (FRAMELESS) process.env.TBM_FRAMELESS = "1";
 

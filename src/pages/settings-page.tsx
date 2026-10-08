@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { KeyRound, Loader2, Moon, PlugZap, Save, Sun } from "lucide-react";
-import { PageHeader } from "@/components/layout/page-header";
 import { DataManager } from "@/components/data/data-manager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,26 +78,26 @@ export function SettingsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <PageHeader
-        title="设置"
-        description="AI 服务配置（OpenAI 兼容接口）"
-        actions={
-          <Button size="sm" onClick={() => void save()} disabled={saving || loading}>
-            {saving ? <Loader2 className="animate-spin" /> : <Save />} 保存配置
-          </Button>
-        }
-      />
-
       <div className="min-h-0 flex-1 overflow-auto p-4">
         <div className="mx-auto max-w-2xl space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">AI API 配置</CardTitle>
-              <CardDescription className="text-xs">
-                需求书解析与 AI 搜索均通过该 OpenAI 兼容接口完成。API Key 使用系统安全存储
-                （Windows DPAPI）加密后保存在数据目录的 config/aj-api.json；需求书内容会发送至
-                该接口，请确认服务方可接受。
-              </CardDescription>
+            <CardHeader className="flex flex-row items-start justify-between gap-3">
+              <div className="space-y-1.5">
+                <CardTitle className="text-sm">AI API 配置</CardTitle>
+                <CardDescription className="text-xs">
+                  需求书解析与 AI 搜索均通过该 OpenAI 兼容接口完成。API Key 使用系统安全存储
+                  （Windows DPAPI）加密后保存在数据目录的 config/aj-api.json；需求书内容会发送至
+                  该接口，请确认服务方可接受。
+                </CardDescription>
+              </div>
+              <Button
+                size="sm"
+                className="shrink-0"
+                onClick={() => void save()}
+                disabled={saving || loading}
+              >
+                {saving ? <Loader2 className="animate-spin" /> : <Save />} 保存配置
+              </Button>
             </CardHeader>
             <CardContent className="space-y-4">
               {loading ? (

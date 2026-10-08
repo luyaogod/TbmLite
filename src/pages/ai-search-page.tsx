@@ -3,7 +3,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Plugin } from "unified";
 import type { Root } from "mdast";
-import { PageHeader } from "@/components/layout/page-header";
+import { Eraser } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -220,25 +220,21 @@ export function AiSearchPage() {
           发送
         </Button>
       )}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        title="清空上下文"
+        aria-label="清空上下文"
+        onClick={startNewSession}
+        disabled={messages.length === 0}
+      >
+        <Eraser />
+      </Button>
     </div>
   );
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <PageHeader
-        title="AI 搜索"
-        actions={
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={startNewSession}
-            disabled={messages.length === 0}
-          >
-            清空上下文
-          </Button>
-        }
-      />
-
       {messages.length === 0 ? (
         /* 未开始对话：提示 + 输入区靠上居中 */
         <div className="flex min-h-0 flex-1 flex-col items-center gap-4 px-4 pt-24">

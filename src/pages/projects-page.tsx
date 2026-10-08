@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pencil, Plus, Trash2, Search, X } from "lucide-react";
-import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -115,39 +114,31 @@ export function ProjectsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <PageHeader
-        title="项目管理"
-        description="创建并维护项目信息"
-        actions={
-          <Button
-            size="sm"
-            onClick={() => {
-              setEditing(null);
-              setDialogOpen(true);
-            }}
-          >
-            <Plus /> 新增项目
-          </Button>
-        }
-      />
-
-      <div className="shrink-0 border-b p-4">
-        <div className="flex items-center gap-3">
-          <div className="relative w-80">
-            <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="pl-8"
-              placeholder="搜索项目编号或名称"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          {columnFilterActive ? (
-            <Button variant="ghost" size="sm" onClick={() => setFilters(INITIAL_FILTERS)}>
-              <X /> 清除列筛选
-            </Button>
-          ) : null}
+      <div className="flex shrink-0 items-center gap-3 border-b p-4">
+        <div className="relative w-80">
+          <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="pl-8"
+            placeholder="搜索项目编号或名称"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
+        {columnFilterActive ? (
+          <Button variant="ghost" size="sm" onClick={() => setFilters(INITIAL_FILTERS)}>
+            <X /> 清除列筛选
+          </Button>
+        ) : null}
+        <Button
+          size="sm"
+          className="ml-auto"
+          onClick={() => {
+            setEditing(null);
+            setDialogOpen(true);
+          }}
+        >
+          <Plus /> 新增项目
+        </Button>
       </div>
 
       <div className="min-h-0 flex-1 p-4">

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Search, Trash2, FileText, X } from "lucide-react";
-import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -141,16 +140,6 @@ export function RequirementsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <PageHeader
-        title="需求书"
-        description="上传 .docx 需求书，AI 自动解析需求明细"
-        actions={
-          <Button size="sm" onClick={() => setUploadOpen(true)}>
-            <Plus /> 新增需求书
-          </Button>
-        }
-      />
-
       <div className="flex shrink-0 items-center gap-3 border-b p-4">
         <Select value={filterPj} onValueChange={setFilterPj}>
           <SelectTrigger className="w-64">
@@ -179,6 +168,9 @@ export function RequirementsPage() {
             <X /> 清除列筛选
           </Button>
         ) : null}
+        <Button size="sm" className="ml-auto" onClick={() => setUploadOpen(true)}>
+          <Plus /> 新增需求书
+        </Button>
       </div>
 
       <div className="min-h-0 flex-1 p-4">

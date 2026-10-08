@@ -16,6 +16,7 @@ import {
   previewLegacyImport,
 } from "./services/legacy-import";
 import { readMeta } from "./core/meta";
+import { TITLEBAR_HEIGHT } from "./core/window-chrome";
 import { defaultFileName as dingtalkFileName, writeDingtalkTemplate, type DingtalkExportItem } from "./services/dingtalk-export";
 import { pathManager, type DataSubDir } from "./utils/paths";
 import logger from "./utils/logger";
@@ -205,7 +206,7 @@ export function registerHandlers(getWin: WinGetter): void {
       getWin()?.setTitleBarOverlay({
         color: options.color,
         symbolColor: options.symbolColor,
-        height: 40,
+        height: TITLEBAR_HEIGHT,
       });
     } catch (err) {
       logger.warn({ error: String(err) }, "设置标题栏配色失败");

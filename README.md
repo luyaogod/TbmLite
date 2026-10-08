@@ -16,9 +16,12 @@
 - Logo：蓝→靛蓝渐变圆角矩形 + 白色 **TBM**（`public/logo.svg`、`public/logo.png`、`build/icon.png`）
 - 重新生成：`powershell -File scripts/make-logo.ps1 -OutDir <输出目录>`（输出 16~512 多尺寸 PNG；
   `build/icon.png` 用于安装包 / exe 图标，electron-builder 自动转换为 ico）
+- Logo 仅用于应用图标（exe / 安装包 / 任务栏 / Alt-Tab），界面内不再重复显示品牌文字
 - Windows 使用无边框窗口（`titleBarStyle: hidden` + `titleBarOverlay`）：顶部不再有系统标题栏的图标与文字，
-  只保留最小化 / 最大化 / 关闭按钮；顶部 40px 为可拖拽标题带（双击最大化），底色随主题变化；
-  侧边栏顶部只放 logo 图标，不再重复「TBM Lite / 需求书管理系统」文字
+  只保留最小化 / 最大化 / 关闭按钮；顶部 32px 为可拖拽标题带（双击最大化），底色随主题变化
+- 侧边栏顶部不再有品牌区块，直接从导航项开始
+- 列表页不再有页面标题栏：标题与侧边栏导航重复，操作按钮（新增项目 / 新增需求书）已并入筛选工具条右侧；
+  AI 搜索的「清空上下文」并入输入区，设置的「保存配置」并入 AI 配置卡片
 
 ## 技术栈
 
