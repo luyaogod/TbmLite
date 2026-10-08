@@ -274,35 +274,8 @@ export const backupService = {
    * 之所以不在本进程直接换库：libsql 原生客户端在 Windows 上 close() 后仍持有文件句柄，
    * 本进程内无法删除/重命名 app.db。
    */
-  async stageRestore(
-    idOrPath: string,
-    opts: { skipPreBackup?: boolean } = {},
-  ): Promise<{ entry: BackupEntry; preBackup: BackupEntry | null; schemaVersion: number }> {
-    return maintenance.runExclusive("restore", async () => {
-      const filePath = resolveBackupFile(idOrPath);
-      const inspection = inspectBackup(filePath);
-      if (!inspection.ok) throw new Error(inspection.message ?? "备份文件不可用");
-
-      const preBackup = opts.skipPreBackup ? null : await createBackupUnlocked("pre-restore");
-      const staged = stagedRestoreFile();
-      rmIfExists(staged);
-      copyFileVerified(filePath, staged);
-
-      const marker: PendingRestore = {
-        source: path.basename(filePath),
-        requestedAt: new Date().toISOString(),
-        schemaVersion: inspection.schemaVersion,
-        preBackup: preBackup?.fileName ?? null,
-      };
-      writeJsonAtomic(pendingRestoreMarker(), marker);
-      logger.audit({
-        action: "restore-staged",
-        target: marker.source,
-        detail: { schemaVersion: inspection.schemaVersion, preBackup: marker.preBackup },
-        result: "ok",
-      });
-      return { entry: toEntry(filePath, "auto"), preBackup, schemaVersion: inspection.schemaVersion };
-    });
+  stageRestore(idOrPath: string, opts: { skipPreBackup?: boolean } = {}) {
+    return maintenance.runExclusive("restore", () => stageRestoreUnlocked(idOrPath, opts));
   },
 
   pendingRestore(): PendingRestore | null {
@@ -337,6 +310,39 @@ export const backupService = {
 };
 
 export { createBackupUnlocked as createBackupNow };
+
+/**
+ * 暂存恢复（不加独占锁，供其他维护任务内部复用，避免嵌套死锁）。
+ * 调用方需已持有 maintenance 独占权（或处于启动早期）。
+ */
+export async function stageRestoreUnlocked(
+  idOrPath: string,
+  opts: { skipPreBackup?: boolean } = {},
+): Promise<{ entry: BackupEntry; preBackup: BackupEntry | null; schemaVersion: number }> {
+  const filePath = resolveBackupFile(idOrPath);
+  const inspection = inspectBackup(filePath);
+  if (!inspection.ok) throw new Error(inspection.message ?? "备份文件不可用");
+
+  const preBackup = opts.skipPreBackup ? null : await createBackupUnlocked("pre-restore");
+  const staged = stagedRestoreFile();
+  rmIfExists(staged);
+  copyFileVerified(filePath, staged);
+
+  const marker: PendingRestore = {
+    source: path.basename(filePath),
+    requestedAt: new Date().toISOString(),
+    schemaVersion: inspection.schemaVersion,
+    preBackup: preBackup?.fileName ?? null,
+  };
+  writeJsonAtomic(pendingRestoreMarker(), marker);
+  logger.audit({
+    action: "restore-staged",
+    target: marker.source,
+    detail: { schemaVersion: inspection.schemaVersion, preBackup: marker.preBackup },
+    result: "ok",
+  });
+  return { entry: toEntry(filePath, "auto"), preBackup, schemaVersion: inspection.schemaVersion };
+}
 
 /**
  * 阶段二：在「尚未建立任何数据库连接」的启动早期完成换库。

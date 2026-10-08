@@ -11,7 +11,9 @@ import { runHousekeeping } from "./core/housekeeping";
 import { scanIssues } from "./core/integrity";
 import { backupService, applyPendingRestore, createBackupNow } from "./services/backup-service";
 import { getHealth } from "./services/data-service";
+import { detectLegacySources, importLegacyData, previewLegacyImport } from "./services/legacy-import";
 import { pathManager } from "./utils/paths";
+import { writeJsonAtomic } from "./utils/fsx";
 import logger from "./utils/logger";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -31,6 +33,10 @@ let quitting = false;
 
 /** 自检模式：只跑数据层（路径/门禁/迁移/备份/健康），不建窗口 */
 const isSmokeTest = process.argv.includes("--tbm-smoke");
+/** 自检扩展：额外做一次备份→恢复往返（会暂存恢复，下次启动生效） */
+const isRestoreSmoke = process.argv.includes("--tbm-smoke-restore");
+/** 自检扩展：额外跑一次旧数据导入（目录取 TBM_LEGACY_DIR 或自动探测） */
+const isLegacySmoke = process.argv.includes("--tbm-smoke-legacy");
 
 // ── 窗口 ────────────────────────────────────────────────
 
@@ -189,7 +195,7 @@ async function runSmokeTest(): Promise<void> {
   try {
     const prepared = await prepareData();
     let restoreRoundTrip: unknown = null;
-    if (prepared) {
+    if (prepared && isRestoreSmoke) {
       // 恢复往返测试：阶段一（暂存）→ 阶段二在下次启动验证
       const backups = backupService.list();
       const target = backups.find((entry) => entry.kind === "auto") ?? backups[0];
@@ -205,6 +211,18 @@ async function runSmokeTest(): Promise<void> {
     }
     const health = await getHealth({ check: true });
     const issues = await scanIssues();
+
+    let legacy: unknown = null;
+    if (prepared && isLegacySmoke) {
+      const explicit = process.env.TBM_LEGACY_DIR?.trim();
+      const target = explicit || detectLegacySources().find((item) => item.readable)?.dir;
+      if (target) {
+        const preview = await previewLegacyImport(target);
+        const imported = await importLegacyData(target);
+        legacy = { target, preview, imported };
+      }
+    }
+
     const report = {
       prepared,
       dataRoot: pathManager.getRoot(),
@@ -213,8 +231,15 @@ async function runSmokeTest(): Promise<void> {
       health,
       issues,
       restoreRoundTrip,
+      legacy,
     };
     process.stdout.write(`SMOKE_REPORT ${JSON.stringify(report, null, 2)}\n`);
+    // Windows GUI 子系统进程的 stdout 不接到控制台，因此同时落盘一份，便于打包后验证
+    try {
+      writeJsonAtomic(path.join(pathManager.getLogsPath(), "smoke-report.json"), report);
+    } catch {
+      // 忽略：仅诊断用途
+    }
     await closeDb();
     app.exit(prepared ? 0 : 1);
   } catch (err) {

@@ -89,17 +89,29 @@ API Key 经系统安全存储（Windows DPAPI）加密后写入数据目录 `con
 ### 数据自检（无界面）
 
 ```powershell
-npx electron . --tbm-smoke        # 输出 SMOKE_REPORT JSON，退出码 0/1
+npx electron . --tbm-smoke              # 数据层自检：输出 SMOKE_REPORT JSON + 写入 logs/smoke-report.json，退出码 0/1
+npx electron . --tbm-smoke --tbm-smoke-restore   # 额外做一次备份→恢复往返（会暂存恢复，下次启动生效）
+npx electron . --tbm-smoke --tbm-smoke-legacy    # 额外跑一次旧数据导入（目录取 TBM_LEGACY_DIR 或自动探测）
 ```
 
-自检会完整跑一遍数据层：门禁 → 迁移（含迁移前备份）→ 每日备份 → 备份恢复往返 →
-完整性检查 + 一致性巡检。可用 `TBM_DATA_DIR` 指向数据目录副本，避免影响正式数据：
+自检会完整跑一遍数据层：门禁 → 迁移（含迁移前备份）→ 每日备份 → 完整性检查 + 一致性巡检。
+可用 `TBM_DATA_DIR` 指向数据目录副本，避免影响正式数据：
 
 ```powershell
 $env:TBM_DATA_DIR="D:\tmp\tbm-data"; npx electron . --tbm-smoke
+$env:TBM_LEGACY_DIR="D:\old-tbm-data"; npx electron . --tbm-smoke --tbm-smoke-legacy
+```
+
+安装包内的自检同样可用（用于验证 asarUnpack 后的原生模块可加载）：
+
+```powershell
+$env:TBM_DATA_DIR="D:\tmp\pkg-data"; & "$env:LOCALAPPDATA\Programs\TBM Lite\TBM Lite.exe" --tbm-smoke
+# Windows GUI 进程不接控制台，结果看 <数据目录>\logs\smoke-report.json
 ```
 
 ## 数据、备份与恢复
+
+完整说明见 [`docs/DATA.md`](docs/DATA.md)（安装与分发见 [`docs/INSTALL.md`](docs/INSTALL.md)）。
 
 用户数据位于 `%APPDATA%\TBM Lite`（便携模式：exe 同级 `portable` 标记文件 → `exe 同级/data`；
 也可用 `TBM_DATA_DIR` 覆盖）。程序升级只覆盖安装资源，不会触碰该目录。
@@ -152,8 +164,26 @@ npx tsx scripts/verify-migration.ts --dir <新数据目录>
 - AI 搜索上下文从「需求书+明细+待办」精简为「项目+需求书+明细+附件名」
 - 新增数据治理能力：迁移框架、版本门禁、滚动备份与一键恢复、完整性巡检/孤立文件回收、重置数据
 
+## 打包
+
+```powershell
+npm run dist        # tsc + vite build + electron-builder（→ release/<版本>/…-Setup.exe）
+```
+
+离线/内网环境注意事项（electron-builder 默认会从 GitHub 下载 Electron 与 winCodeSign）：
+
+```powershell
+# 1) 用本地已安装的 Electron 发行版，跳过下载
+npx electron-builder -c.electronDist=node_modules/electron/dist --publish never
+
+# 2) 若 winCodeSign 无法下载（仅影响图标/版本信息写入与签名），先跳过
+npx electron-builder -c.electronDist=node_modules/electron/dist -c.win.signAndEditExecutable=false
+```
+
+打包配置与验收清单见 [`docs/INSTALL.md`](docs/INSTALL.md)。
+
 ## 已知限制
 
 - 未接入自动更新（electron-updater 与发版流水线为下一阶段）；目前通过重新安装安装包升级。
-- 安装包尚未代码签名，Windows SmartScreen 会提示未知发布者。
+- 安装包尚未代码签名，Windows SmartScreen 会提示未知发布者；在签名前不应开启静默自动更新。
 - 备份只包含数据库；附件为只增不改的内容寻址文件，删除时进 `files/.trash`（7 天后清理）。

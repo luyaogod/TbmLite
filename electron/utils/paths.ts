@@ -133,7 +133,8 @@ class PathManager {
 
     this.adoptLegacyLayout();
     this.ensureLayout();
-    this.applySeed();
+    // 种子文件只对安装版有意义（开发态数据目录就在仓库内，无需回写）
+    if (!this.isDev) this.applySeed();
     this.initialized = true;
   }
 

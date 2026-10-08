@@ -20,3 +20,4 @@ electron/app-data/**/backups/
 
 # 本地实现临时目录
 .tmp-impl/
+electron/app-data/**/tmp/

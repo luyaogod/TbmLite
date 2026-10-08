@@ -10,6 +10,12 @@ import { attachmentService } from "./services/attachment-service";
 import { agentService } from "./services/agent-service";
 import { backupService } from "./services/backup-service";
 import { getHealth, resetData, runGc, runIntegrityScan, type ResetScope } from "./services/data-service";
+import {
+  detectLegacySources,
+  importLegacyData,
+  previewLegacyImport,
+} from "./services/legacy-import";
+import { readMeta } from "./core/meta";
 import { pathManager, type DataSubDir } from "./utils/paths";
 import logger from "./utils/logger";
 
@@ -155,7 +161,21 @@ export function registerHandlers(getWin: WinGetter): void {
     userData: app.getPath("userData"),
     packaged: app.isPackaged,
     maintenance: maintenance.isActive(),
+    firstRunCompleted: readMeta()?.firstRunCompleted ?? false,
   }));
+
+  ipcMain.handle("app:pick-directory", async (_event, title?: string) => {
+    const parent = getWin();
+    const options = {
+      title: title ?? "选择目录",
+      properties: ["openDirectory" as const, "dontAddToRecent" as const],
+    };
+    const result = parent
+      ? await dialog.showOpenDialog(parent, options)
+      : await dialog.showOpenDialog(options);
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
+  });
 
   ipcMain.handle("app:open-data-dir", async (_event, sub?: DataSubDir) => {
     const target = pathManager.getSubDir(sub ?? "root");
@@ -175,6 +195,22 @@ export function registerHandlers(getWin: WinGetter): void {
   ipcMain.handle("data:check-integrity", () => runIntegrityScan());
   ipcMain.handle("data:gc-orphan-files", guarded((dryRun?: boolean) => runGc(Boolean(dryRun))));
   ipcMain.handle("data:reset", guarded((scope: ResetScope, confirm: string) => resetData(scope, confirm)));
+
+  // ── 旧 TBM 数据导入 ──────────────────────────────────
+
+  ipcMain.handle("legacy:detect", () => detectLegacySources());
+  ipcMain.handle("legacy:preview", (_event, dir: string) => previewLegacyImport(dir));
+  ipcMain.handle("legacy:import", async (_event, dir: string) => {
+    const report = await importLegacyData(dir);
+    if (report.rolledBack) {
+      // 回滚采用「暂存恢复」，需重启进程在建库连接前换库
+      setTimeout(() => {
+        app.relaunch();
+        app.exit(0);
+      }, 1500);
+    }
+    return report;
+  });
 
   // ── 备份 ──────────────────────────────────────────────
 

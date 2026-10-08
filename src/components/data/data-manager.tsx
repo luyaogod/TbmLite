@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   DatabaseBackup,
+  Database,
   FolderOpen,
   HardDriveDownload,
   Loader2,
@@ -59,6 +60,10 @@ export function DataManager() {
   const [restoreTarget, setRestoreTarget] = useState<BackupEntryView | null>(null);
   const [resetScope, setResetScope] = useState<"business" | "factory" | null>(null);
   const [confirmWord, setConfirmWord] = useState("");
+  const [legacyCandidates, setLegacyCandidates] = useState<LegacyCandidateView[]>([]);
+  const [legacyDir, setLegacyDir] = useState<string | null>(null);
+  const [legacyPreview, setLegacyPreview] = useState<LegacyPreviewView | null>(null);
+  const [legacyConfirm, setLegacyConfirm] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -78,6 +83,47 @@ export function DataManager() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    window.api.legacy
+      .detect()
+      .then(setLegacyCandidates)
+      .catch(() => undefined);
+  }, []);
+
+  const loadLegacyPreview = (dir: string) =>
+    withBusy("legacy-preview", async () => {
+      const preview = await window.api.legacy.preview(dir);
+      setLegacyDir(dir);
+      setLegacyPreview(preview);
+    });
+
+  const pickLegacyDir = () =>
+    withBusy("legacy-pick", async () => {
+      const picked = await window.api.app.pickDirectory("选择旧 TBM 数据目录（包含 db 与 files）");
+      if (!picked) return;
+      const preview = await window.api.legacy.preview(picked);
+      setLegacyDir(picked);
+      setLegacyPreview(preview);
+    });
+
+  const runLegacyImport = () =>
+    withBusy("legacy-import", async () => {
+      if (!legacyDir) return;
+      const result = await window.api.legacy.import(legacyDir);
+      setLegacyConfirm(false);
+      if (result.ok) {
+        const inserted = result.tables.reduce((sum, table) => sum + table.inserted, 0);
+        toast.success(`导入完成：新增 ${inserted} 行，附件文件复制 ${result.files.copied} 个`);
+        setLegacyPreview(null);
+        setLegacyDir(null);
+        await refresh();
+      } else if (result.rolledBack) {
+        toast.error("导入失败，已回滚，应用即将重启", { duration: 8000 });
+      } else {
+        toast.error(result.error ?? "导入失败");
+      }
+    });
 
   const withBusy = async (tag: string, task: () => Promise<void>) => {
     setBusy(tag);
@@ -326,6 +372,94 @@ export function DataManager() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">从旧 TBM 导入</CardTitle>
+          <CardDescription className="text-xs">
+            把旧版 TBM 的项目 / 需求书 / 明细 / 附件导入到当前数据目录。导入是幂等的：
+            已存在的记录会被跳过，导入前会自动备份（pre-import），失败自动回滚。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {legacyCandidates.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">自动检测到的旧数据目录</Label>
+              {legacyCandidates.map((item) => (
+                <button
+                  key={item.dir}
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => void loadLegacyPreview(item.dir)}
+                  className={`flex w-full items-center justify-between rounded-md border p-2 text-left text-xs transition-colors ${
+                    legacyDir === item.dir ? "border-primary bg-primary/5" : "hover:bg-accent"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Database className="size-3.5" />
+                    <span className="font-mono">{item.dir}</span>
+                  </span>
+                  <span className="text-muted-foreground">
+                    {formatBytes(item.sizeBytes)}
+                    {item.hasFiles ? " · 含附件" : " · 无附件目录"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy !== null}
+              onClick={() => void pickLegacyDir()}
+            >
+              {busy === "legacy-pick" ? <Loader2 className="animate-spin" /> : <FolderOpen />}
+              手动选择目录
+            </Button>
+            {legacyPreview && (
+              <Button size="sm" disabled={busy !== null} onClick={() => setLegacyConfirm(true)}>
+                {busy === "legacy-import" ? <Loader2 className="animate-spin" /> : <Database />}
+                导入
+              </Button>
+            )}
+          </div>
+
+          {busy === "legacy-preview" && (
+            <p className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" /> 正在读取旧数据…
+            </p>
+          )}
+
+          {legacyPreview && (
+            <div className="space-y-1 rounded-md border p-3 text-xs">
+              <div className="font-medium">导入预览</div>
+              {legacyPreview.tables.map((table) => (
+                <div key={table.table} className="flex justify-between">
+                  <span className="font-mono">{table.table}</span>
+                  <span className="text-muted-foreground">
+                    旧库 {table.source} 行 · 可导入 {table.insertable} · 已存在 {table.duplicate}
+                  </span>
+                </div>
+              ))}
+              <div className="flex justify-between">
+                <span className="font-mono">ffff_t（附件）</span>
+                <span className="text-muted-foreground">
+                  旧库 {legacyPreview.attachments.records} 条 · 可导入 {
+                    legacyPreview.attachments.insertable
+                  } · 文件缺失 {legacyPreview.attachments.missingFiles}
+                </span>
+              </div>
+              {legacyPreview.warnings.map((warning) => (
+                <p key={warning} className="text-destructive">
+                  {warning}
+                </p>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card className="border-destructive/40">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-sm text-destructive">
@@ -378,6 +512,42 @@ export function DataManager() {
               onClick={() => restoreTarget && void doRestore(restoreTarget)}
             >
               恢复
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={legacyConfirm} onOpenChange={setLegacyConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认导入旧数据？</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>将从以下目录导入，导入前会自动创建 pre-import 备份：</p>
+                <p className="font-mono text-xs">{legacyDir}</p>
+                {legacyPreview && (
+                  <p className="text-xs text-muted-foreground">
+                    预计新增：
+                    {legacyPreview.tables
+                      .map((table) => `${table.table} ${table.insertable} 行`)
+                      .join(" · ")}
+                    {" · 附件 "}
+                    {legacyPreview.attachments.insertable} 条
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  不会修改或删除当前已有数据；重复记录自动跳过。
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy !== null}
+              onClick={() => void runLegacyImport()}
+            >
+              开始导入
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

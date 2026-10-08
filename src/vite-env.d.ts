@@ -32,6 +32,42 @@ interface AppInfoView {
   userData: string;
   packaged: boolean;
   maintenance: boolean;
+  firstRunCompleted: boolean;
+}
+
+interface LegacyCandidateView {
+  dir: string;
+  dbFile: string;
+  hasFiles: boolean;
+  readable: boolean;
+  sizeBytes: number;
+}
+
+interface LegacyTablePreviewView {
+  table: string;
+  source: number;
+  insertable: number;
+  duplicate: number;
+  missingColumns: string[];
+}
+
+interface LegacyPreviewView {
+  sourceDir: string;
+  tables: LegacyTablePreviewView[];
+  attachments: { records: number; insertable: number; missingFiles: number; missingSamples: string[] };
+  warnings: string[];
+}
+
+interface LegacyImportReportView {
+  ok: boolean;
+  sourceDir: string;
+  tables: Array<{ table: string; source: number; inserted: number; duplicate: number; orphan: number }>;
+  files: { copied: number; existing: number; missing: number; missingSamples: string[] };
+  warnings: string[];
+  preBackup: string | null;
+  durationMs: number;
+  rolledBack: boolean;
+  error?: string;
 }
 
 interface BackupEntryView {
@@ -126,7 +162,13 @@ interface Window {
       info(): Promise<AppInfoView>;
       openDataDir(sub?: DataSubDirName): Promise<string>;
       openLog(): Promise<string>;
+      pickDirectory(title?: string): Promise<string | null>;
       onMaintenance(listener: (state: IdleState) => void): () => void;
+    };
+    legacy: {
+      detect(): Promise<LegacyCandidateView[]>;
+      preview(dir: string): Promise<LegacyPreviewView>;
+      import(dir: string): Promise<LegacyImportReportView>;
     };
     data: {
       health(check?: boolean): Promise<DataHealthView>;

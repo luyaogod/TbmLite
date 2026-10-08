@@ -149,11 +149,26 @@ contextBridge.exposeInMainWorld("api", {
     openLog() {
       return ipcRenderer.invoke("app:open-log");
     },
+    pickDirectory(title?: string) {
+      return ipcRenderer.invoke("app:pick-directory", title);
+    },
     /** 订阅维护状态（恢复/重置期间 UI 应禁用写操作） */
     onMaintenance(listener: (state: { active: boolean; tag: string | null }) => void) {
       const handler = (_e: unknown, state: { active: boolean; tag: string | null }) => listener(state);
       ipcRenderer.on("maintenance:state", handler);
       return () => ipcRenderer.off("maintenance:state", handler);
+    },
+  },
+
+  legacy: {
+    detect() {
+      return ipcRenderer.invoke("legacy:detect");
+    },
+    preview(dir: string) {
+      return ipcRenderer.invoke("legacy:preview", dir);
+    },
+    import(dir: string) {
+      return ipcRenderer.invoke("legacy:import", dir);
     },
   },
 

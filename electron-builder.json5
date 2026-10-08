@@ -47,9 +47,11 @@
     "createStartMenuShortcut": true,
     "shortcutName": "TBM Lite",
     "uninstallDisplayName": "TBM Lite ${version}",
-    // 卸载默认保留用户数据（data 目录由用户显式删除）
+    // 卸载默认保留用户数据（数据目录由卸载向导询问是否删除）
     "deleteAppDataOnUninstall": false,
-    "differentialPackage": true
+    "differentialPackage": true,
+    // 安装前检查（系统版本 / 运行中进程）与卸载时询问是否删数据
+    "include": "build/installer.nsh"
   },
   "publish": [
     {
