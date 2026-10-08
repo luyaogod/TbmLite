@@ -33,6 +33,7 @@ interface AppInfoView {
   packaged: boolean;
   maintenance: boolean;
   firstRunCompleted: boolean;
+  platform: string;
 }
 
 interface LegacyCandidateView {
@@ -159,7 +160,10 @@ interface Window {
       deleteSession(sessionId: string): Promise<void>;
     };
     app: {
+      /** 是否无边框窗口（顶部标题带 + 系统窗口按钮） */
+      frameless: boolean;
       info(): Promise<AppInfoView>;
+      setTitleBarTheme(options: { color: string; symbolColor: string }): Promise<{ ok: boolean }>;
       openDataDir(sub?: DataSubDirName): Promise<string>;
       openLog(): Promise<string>;
       pickDirectory(title?: string): Promise<string | null>;

@@ -140,8 +140,13 @@ contextBridge.exposeInMainWorld("api", {
   },
 
   app: {
+    /** 无边框窗口（顶部标题带 + 系统窗口按钮） */
+    frameless: process.env.TBM_FRAMELESS === "1",
     info() {
       return ipcRenderer.invoke("app:info");
+    },
+    setTitleBarTheme(options: { color: string; symbolColor: string }) {
+      return ipcRenderer.invoke("app:titlebar-theme", options);
     },
     openDataDir(sub?: "root" | "db" | "files" | "config" | "logs" | "backups" | "tmp") {
       return ipcRenderer.invoke("app:open-data-dir", sub);

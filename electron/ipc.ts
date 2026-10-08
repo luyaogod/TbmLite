@@ -163,6 +163,7 @@ export function registerHandlers(getWin: WinGetter): void {
     packaged: app.isPackaged,
     maintenance: maintenance.isActive(),
     firstRunCompleted: readMeta()?.firstRunCompleted ?? false,
+    platform: process.platform,
   }));
 
   ipcMain.handle("app:pick-directory", async (_event, title?: string) => {
@@ -198,6 +199,19 @@ export function registerHandlers(getWin: WinGetter): void {
   ipcMain.handle("data:reset", guarded((scope: ResetScope, confirm: string) => resetData(scope, confirm)));
 
   // ── 旧 TBM 数据导入 ──────────────────────────────────
+
+  ipcMain.handle("app:titlebar-theme", (_event, options: { color: string; symbolColor: string }) => {
+    try {
+      getWin()?.setTitleBarOverlay({
+        color: options.color,
+        symbolColor: options.symbolColor,
+        height: 40,
+      });
+    } catch (err) {
+      logger.warn({ error: String(err) }, "设置标题栏配色失败");
+    }
+    return { ok: true };
+  });
 
   ipcMain.handle("legacy:detect", () => detectLegacySources());
   ipcMain.handle("legacy:preview", (_event, dir: string) => previewLegacyImport(dir));

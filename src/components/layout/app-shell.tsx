@@ -1,5 +1,6 @@
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { NavLink, useLocation, useOutlet } from "react-router-dom";
+import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -46,21 +47,79 @@ function KeepAliveOutlet() {
   );
 }
 
-export function AppShell() {
-  return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
-      {/* 侧边导航 */}
-      <aside className="flex w-56 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
-        <div className="flex h-14 flex-col justify-center gap-0.5 border-b px-4">
-          <span className="text-sm font-semibold">TBM Lite</span>
-          <span className="text-[11px] text-sidebar-foreground/60">需求书管理系统</span>
-        </div>
+/** 把任意 CSS 颜色（包含 oklch 等新语法）转为 #rrggbb
+ *  Electron 的 setTitleBarOverlay 只接受传统 CSS 颜色，不能直接传 oklch */
+function toHexColor(color: string, fallback: string): string {
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return fallback;
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+    if ([r, g, b].some((value) => Number.isNaN(value))) return fallback;
+    return `#${[r, g, b].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+  } catch {
+    return fallback;
+  }
+}
 
-        <nav className="flex flex-1 flex-col gap-1 p-2">
-          {navItems.map(({ to, label }) => (
+export function AppShell() {
+  // 无边框窗口（Windows）：顶部留一条可拖拽的标题带，窗口按钮由系统绘制在右上角
+  const frameless = typeof window !== "undefined" && window.api?.app?.frameless === true;
+  const shellRef = useRef<HTMLDivElement>(null);
+  const { resolvedTheme } = useTheme();
+
+  // 标题带底色跟随主题，避免系统按钮区与应用背景色不一致
+  useEffect(() => {
+    if (!frameless) return;
+    const isDark = resolvedTheme === "dark";
+    const fallback = isDark ? "#1f1f1f" : "#ffffff";
+    const raw = shellRef.current ? getComputedStyle(shellRef.current).backgroundColor : fallback;
+    void window.api.app
+      .setTitleBarTheme({
+        color: toHexColor(raw, fallback),
+        symbolColor: isDark ? "#e5e7eb" : "#1f2937",
+      })
+      .catch(() => undefined);
+  }, [frameless, resolvedTheme]);
+
+  return (
+    <div ref={shellRef} className="flex h-screen w-full flex-col overflow-hidden bg-background">
+      {frameless ? <div className="titlebar-drag h-10 shrink-0 border-b bg-background" /> : null}
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* 侧边导航 */}
+        <aside className="flex w-56 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
+          <div className="titlebar-drag flex h-14 items-center border-b px-4">
+            <img src="logo.svg" alt="TBM" className="size-6 rounded-[5px]" draggable={false} />
+          </div>
+
+          <nav className="flex flex-1 flex-col gap-1 p-2">
+            {navItems.map(({ to, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) =>
+                  cn(
+                    "rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    isActive
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/75",
+                  )
+                }
+              >
+                {label}
+              </NavLink>
+            ))}
+          </nav>
+
+          <div className="border-t p-2">
             <NavLink
-              key={to}
-              to={to}
+              to="/settings"
               className={({ isActive }) =>
                 cn(
                   "rounded-md px-3 py-2 text-sm font-medium transition-colors",
@@ -71,33 +130,16 @@ export function AppShell() {
                 )
               }
             >
-              {label}
+              设置
             </NavLink>
-          ))}
-        </nav>
-
-        <div className="border-t p-2">
-          <NavLink
-            to="/settings"
-            className={({ isActive }) =>
-              cn(
-                "rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/75",
-              )
-            }
-          >
-            设置
-          </NavLink>
-        </div>
+          </div>
       </aside>
 
       {/* 主内容区（页面保活） */}
       <main className="relative min-w-0 flex-1 overflow-hidden">
         <KeepAliveOutlet />
       </main>
+      </div>
     </div>
   );
 }

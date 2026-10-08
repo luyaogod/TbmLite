@@ -38,6 +38,12 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 let win: BrowserWindow | null = null;
 let quitting = false;
 
+/** 无边框窗口（Windows）：去掉系统标题栏的图标与文字，仅保留窗口按钮
+ *  顶部 40px 由渲染层留出可拖拽标题带 */
+const TITLEBAR_HEIGHT = 40;
+const FRAMELESS = process.platform === "win32";
+if (FRAMELESS) process.env.TBM_FRAMELESS = "1";
+
 /** 自检模式：只跑数据层（路径/门禁/迁移/备份/健康），不建窗口 */
 const isSmokeTest = process.argv.includes("--tbm-smoke");
 /** 自检扩展：额外做一次备份→恢复往返（会暂存恢复，下次启动生效） */
@@ -55,7 +61,17 @@ function createWindow(): void {
     height: 860,
     minWidth: 1000,
     minHeight: 660,
-    icon: path.join(process.env.VITE_PUBLIC ?? "", "electron-vite.svg"),
+    icon: path.join(process.env.VITE_PUBLIC ?? "", "logo.png"),
+    ...(FRAMELESS
+      ? {
+          titleBarStyle: "hidden" as const,
+          titleBarOverlay: {
+            color: "#ffffff",
+            symbolColor: "#1f2937",
+            height: TITLEBAR_HEIGHT,
+          },
+        }
+      : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
     },

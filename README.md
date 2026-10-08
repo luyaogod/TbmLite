@@ -11,6 +11,15 @@
 | 开发人员填写 | 需求明细中的「开发人员」为自由文本，直接填写姓名 |
 | AI 搜索 | 基于全量项目 / 需求书 / 需求明细数据的自然语言问答，流式输出，多轮会话，项目过滤，回答中需求书可点击跳转 |
 
+## 品牌与窗口外观
+
+- Logo：蓝→靛蓝渐变圆角矩形 + 白色 **TBM**（`public/logo.svg`、`public/logo.png`、`build/icon.png`）
+- 重新生成：`powershell -File scripts/make-logo.ps1 -OutDir <输出目录>`（输出 16~512 多尺寸 PNG；
+  `build/icon.png` 用于安装包 / exe 图标，electron-builder 自动转换为 ico）
+- Windows 使用无边框窗口（`titleBarStyle: hidden` + `titleBarOverlay`）：顶部不再有系统标题栏的图标与文字，
+  只保留最小化 / 最大化 / 关闭按钮；顶部 40px 为可拖拽标题带（双击最大化），底色随主题变化；
+  侧边栏顶部只放 logo 图标，不再重复「TBM Lite / 需求书管理系统」文字
+
 ## 技术栈
 
 | 类别 | 库 |
