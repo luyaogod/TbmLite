@@ -6,7 +6,15 @@
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="113" ry="113" fill="url(#tbm-bg)" />
-  <g fill="#ffffff" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-weight="700" font-size="136" text-anchor="middle">
-    <text x="256" y="256" dominant-baseline="central" letter-spacing="14">TBM</text>
-  </g>
+  <text
+    x="256"
+    y="256"
+    fill="#ffffff"
+    font-family="Calibri Light, Segoe UI Light, Helvetica Neue, Arial, sans-serif"
+    font-weight="300"
+    font-size="136"
+    letter-spacing="14"
+    text-anchor="middle"
+    dominant-baseline="central"
+  >TBM</text>
 </svg>
