@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Search, Trash2, FileText } from "lucide-react";
+import { Plus, Search, Trash2, FileText, X } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,9 +31,29 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/status-badge";
+import {
+  buildFilterOptions,
+  ColumnFilterHeader,
+  EMPTY_FILTER,
+  isFilterActive,
+  matchesFilter,
+  type ColumnFilterState,
+} from "@/components/data/column-filter";
 import { UploadDialog } from "@/components/requirements/upload-dialog";
 import { toast } from "sonner";
 import { REQUIREMENT_STATUS, findStatus } from "@/lib/constants";
+
+type FilterKey = "xqaapj" | "xqaa001" | "xqaa002" | "xqaa003" | "xqaa004" | "xqaa005" | "xqaacrtid";
+
+const INITIAL_FILTERS: Record<FilterKey, ColumnFilterState> = {
+  xqaapj: EMPTY_FILTER,
+  xqaa001: EMPTY_FILTER,
+  xqaa002: EMPTY_FILTER,
+  xqaa003: EMPTY_FILTER,
+  xqaa004: EMPTY_FILTER,
+  xqaa005: EMPTY_FILTER,
+  xqaacrtid: EMPTY_FILTER,
+};
 
 export function RequirementsPage() {
   const navigate = useNavigate();
@@ -42,8 +62,39 @@ export function RequirementsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterPj, setFilterPj] = useState("all");
+  const [filters, setFilters] = useState<Record<FilterKey, ColumnFilterState>>(INITIAL_FILTERS);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [deleting, setDeleting] = useState<RequirementRow | null>(null);
+
+  const setFilter = useCallback((key: FilterKey, state: ColumnFilterState) => {
+    setFilters((prev) => ({ ...prev, [key]: state }));
+  }, []);
+
+  const optionLists = useMemo(
+    () => ({
+      xqaapj: buildFilterOptions(rows.map((r) => r.xqaapj)),
+      xqaa001: buildFilterOptions(rows.map((r) => r.xqaa001)),
+      xqaa002: buildFilterOptions(rows.map((r) => r.xqaa002)),
+      xqaa003: buildFilterOptions(rows.map((r) => r.xqaa003)),
+      xqaa004: buildFilterOptions(rows.map((r) => r.xqaa004), (v) => findStatus(REQUIREMENT_STATUS, v)?.label ?? v),
+      xqaa005: buildFilterOptions(rows.map((r) => r.xqaa005)),
+      xqaacrtid: buildFilterOptions(rows.map((r) => r.xqaacrtid)),
+    }),
+    [rows],
+  );
+
+  const columnFilterActive = useMemo(
+    () => (Object.keys(filters) as FilterKey[]).some((key) => isFilterActive(filters[key])),
+    [filters],
+  );
+
+  const visibleRows = useMemo(
+    () =>
+      rows.filter((row) =>
+        (Object.keys(filters) as FilterKey[]).every((key) => matchesFilter(filters[key], row[key])),
+      ),
+    [rows, filters],
+  );
 
   const fetchData = useCallback(async () => {
     try {
@@ -123,20 +174,40 @@ export function RequirementsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        {columnFilterActive ? (
+          <Button variant="ghost" size="sm" onClick={() => setFilters(INITIAL_FILTERS)}>
+            <X /> 清除列筛选
+          </Button>
+        ) : null}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto p-4">
-        <div className="bg-card">
-          <Table>
-            <TableHeader>
+      <div className="min-h-0 flex-1 p-4">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border bg-card">
+          <div className="min-h-0 flex-1 overflow-auto">
+          <Table containerClassName="overflow-visible">
+            <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>
-                <TableHead className="w-28">项目编号</TableHead>
-                <TableHead className="w-44">需求书编号</TableHead>
-                <TableHead>需求书名称</TableHead>
-                <TableHead className="w-32">需求书日期</TableHead>
-                <TableHead className="w-28">状态</TableHead>
-                <TableHead>备注</TableHead>
-                <TableHead className="w-24">创建人</TableHead>
+                <TableHead className="w-32">
+                  <ColumnFilterHeader label="项目编号" options={optionLists.xqaapj} state={filters.xqaapj} onChange={(s) => setFilter("xqaapj", s)} />
+                </TableHead>
+                <TableHead className="w-44">
+                  <ColumnFilterHeader label="需求书编号" options={optionLists.xqaa001} state={filters.xqaa001} onChange={(s) => setFilter("xqaa001", s)} />
+                </TableHead>
+                <TableHead>
+                  <ColumnFilterHeader label="需求书名称" options={optionLists.xqaa002} state={filters.xqaa002} onChange={(s) => setFilter("xqaa002", s)} />
+                </TableHead>
+                <TableHead className="w-32">
+                  <ColumnFilterHeader label="需求书日期" options={optionLists.xqaa003} state={filters.xqaa003} onChange={(s) => setFilter("xqaa003", s)} />
+                </TableHead>
+                <TableHead className="w-28">
+                  <ColumnFilterHeader label="状态" options={optionLists.xqaa004} state={filters.xqaa004} onChange={(s) => setFilter("xqaa004", s)} />
+                </TableHead>
+                <TableHead>
+                  <ColumnFilterHeader label="备注" options={optionLists.xqaa005} state={filters.xqaa005} onChange={(s) => setFilter("xqaa005", s)} />
+                </TableHead>
+                <TableHead className="w-24">
+                  <ColumnFilterHeader label="创建人" options={optionLists.xqaacrtid} state={filters.xqaacrtid} onChange={(s) => setFilter("xqaacrtid", s)} />
+                </TableHead>
                 <TableHead className="w-20 text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
@@ -149,19 +220,19 @@ export function RequirementsPage() {
                     </TableCell>
                   </TableRow>
                 ))
-              ) : rows.length === 0 ? (
+              ) : visibleRows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
                     <div className="flex flex-col items-center gap-1">
                       <FileText className="size-5 text-muted-foreground/60" />
-                      {search || filterPj !== "all"
+                      {search || filterPj !== "all" || columnFilterActive
                         ? "没有匹配的需求书"
                         : "暂无需求书，点击右上角「新增需求书」上传"}
                     </div>
                   </TableCell>
                 </TableRow>
               ) : (
-                rows.map((r) => (
+                visibleRows.map((r) => (
                   <TableRow key={`${r.xqaapj}|${r.xqaa001}`}>
                     <TableCell className="font-mono">{r.xqaapj}</TableCell>
                     <TableCell>
@@ -209,6 +280,7 @@ export function RequirementsPage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </div>
       </div>
 
