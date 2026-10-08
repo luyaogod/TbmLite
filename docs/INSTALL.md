@@ -76,6 +76,7 @@ npm run dist         # electron-builder → release/<版本>/TBM Lite-Windows-<�
 | `nsis.include: build/installer.nsh` | 前置检查与卸载询问 |
 | `nsis.differentialPackage: true` | 生成增量更新包（配合自动更新） |
 | `publish: github` | 发布渠道（`luyaogod/TbmLite`，仓库为 public，无需内置 Token） |
+| `package.json` 必须含 `productName` | Electron 用 `app.getName()`（= `productName`，回退到 `name`）决定 `userData`。缺失时数据目录会变成 `%APPDATA%\tbm-lite`，与文档/卸载脚本不一致 |
 | `win.verifyUpdateCodeSignature` | 未签名阶段必须为 `false`，签名后应改回 `true` |
 
 ### 打包后验收清单
