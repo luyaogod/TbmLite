@@ -74,7 +74,7 @@ export const xqab_t = sqliteTable("xqab_t", {
   primaryKey({ columns: [table.xqabpj, table.xqab001, table.xqabseq] }),
 ]);
 
-/** 附件表 */
+/** 附件表：内容寻址 + 引用模型（同一物理文件可被多个归属引用） */
 export const ffff_t = sqliteTable("ffff_t", {
   /** 归属表名 */
   ffff001: text("ffff001").notNull(),
@@ -83,7 +83,7 @@ export const ffff_t = sqliteTable("ffff_t", {
   /** 存放路径 */
   ffff003: text("ffff003").notNull(),
   /** hash */
-  ffff004: text("ffff004").primaryKey(),
+  ffff004: text("ffff004").notNull(),
   /** 原始文件名 */
   ffff005: text("ffff005").notNull(),
   /** 文件拓展名 */
@@ -94,4 +94,6 @@ export const ffff_t = sqliteTable("ffff_t", {
   ffffecrtid: text("ffffecrtid").notNull(),
   /** 文件状态 */
   ffffstus: integer("ffffstus", { mode: "boolean" }).notNull(),
-});
+}, (table) => [
+  primaryKey({ columns: [table.ffff001, table.ffff002, table.ffff004] }),
+]);

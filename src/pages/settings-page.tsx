@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { KeyRound, Loader2, Moon, PlugZap, Save, Sun } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
+import { DataManager } from "@/components/data/data-manager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +16,9 @@ export function SettingsPage() {
   const [baseUrl, setBaseUrl] = useState("https://api.deepseek.com/v1");
   const [model, setModel] = useState("deepseek-chat");
   const [apiKey, setApiKey] = useState("");
+  const [keyState, setKeyState] = useState<AiConfigView["keyState"]>("missing");
+  const [keyEncrypted, setKeyEncrypted] = useState(true);
+  const [appInfo, setAppInfo] = useState<AppInfoView | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const { theme, setTheme } = useTheme();
@@ -25,14 +29,15 @@ export function SettingsPage() {
       .get()
       .then((cfg) => {
         if (cfg) {
-          setBaseUrl(cfg.ANTHROPIC_BASE_URL ?? baseUrl);
-          setModel(cfg.ANTHROPIC_MODEL ?? model);
-          setApiKey(cfg.ANTHROPIC_AUTH_TOKEN ?? "");
+          setBaseUrl(cfg.baseUrl);
+          setModel(cfg.model);
+          setKeyState(cfg.keyState);
+          setKeyEncrypted(cfg.keyEncrypted);
         }
       })
       .catch(() => toast.error("读取配置失败"))
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    window.api.app.info().then(setAppInfo).catch(() => undefined);
   }, []);
 
   const save = async () => {
@@ -43,11 +48,15 @@ export function SettingsPage() {
     setSaving(true);
     try {
       await window.api.ai.config.save({
-        ANTHROPIC_BASE_URL: baseUrl.trim(),
-        ANTHROPIC_MODEL: model.trim(),
-        ANTHROPIC_AUTH_TOKEN: apiKey.trim(),
+        baseUrl: baseUrl.trim(),
+        model: model.trim(),
+        // 留空表示保持已保存的 Key 不变
+        apiKey: apiKey.trim() ? apiKey.trim() : null,
       });
       toast.success("配置已保存");
+      const cfg = await window.api.ai.config.get();
+      setKeyState(cfg.keyState);
+      setApiKey("");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "保存失败");
     } finally {
@@ -86,8 +95,9 @@ export function SettingsPage() {
             <CardHeader>
               <CardTitle className="text-sm">AI API 配置</CardTitle>
               <CardDescription className="text-xs">
-                需求书解析与 AI 搜索均通过该 OpenAI 兼容接口完成，配置保存在应用数据目录
-                的 config/aj-api.json
+                需求书解析与 AI 搜索均通过该 OpenAI 兼容接口完成。API Key 使用系统安全存储
+                （Windows DPAPI）加密后保存在数据目录的 config/aj-api.json；需求书内容会发送至
+                该接口，请确认服务方可接受。
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -124,10 +134,26 @@ export function SettingsPage() {
                     <Input
                       id="api-key"
                       type="password"
-                      placeholder="sk-..."
+                      placeholder={
+                        keyState === "undecryptable"
+                          ? "原 Key 无法解密（可能更换了机器），请重新填写"
+                          : keyState === "ok" || keyState === "plaintext"
+                            ? "已保存，留空保持不变"
+                            : "sk-..."
+                      }
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
                     />
+                    {!keyEncrypted && (
+                      <p className="text-[11px] text-destructive">
+                        当前系统不支持安全存储，Key 只能以明文保存
+                      </p>
+                    )}
+                    {keyState === "plaintext" && keyEncrypted && (
+                      <p className="text-[11px] text-muted-foreground">
+                        检测到历史明文 Key，保存后会自动加密存储
+                      </p>
+                    )}
                   </div>
                   <div className="flex justify-end gap-2 pt-1">
                     <Button variant="outline" size="sm" onClick={() => void test()} disabled={testing}>
@@ -161,14 +187,22 @@ export function SettingsPage() {
             </CardContent>
           </Card>
 
+          <DataManager />
+
           <Card>
             <CardHeader>
               <CardTitle className="text-sm">关于</CardTitle>
             </CardHeader>
-            <CardContent className="text-xs text-muted-foreground">
-              <p>TBM Lite v0.1.0 — 需求书管理系统（shadcn/ui 重写版）</p>
+            <CardContent className="space-y-1 text-xs text-muted-foreground">
+              <p>TBM Lite v{appInfo?.version ?? "-"} — 需求书管理系统（shadcn/ui 重写版）</p>
+              <p>
+                数据结构版本 v{appInfo?.schemaVersion ?? 0}（程序支持 v
+                {appInfo?.currentSchemaVersion ?? 0}）
+                {appInfo?.packaged ? " · 安装版" : " · 开发版"}
+              </p>
               <p className="mt-1">
-                功能：项目管理 · 需求书上传（.docx AI 解析）· 开发人员填写 · AI 搜索
+                功能：项目管理 · 需求书上传（.docx AI 解析）· 开发人员填写 · AI 搜索 ·
+                自动备份与恢复
               </p>
             </CardContent>
           </Card>

@@ -1,6 +1,88 @@
 /// <reference types="vite/client" />
 
+// 预加载层暴露的接口类型（与 electron/preload.ts 保持一致）
+type DataSubDirName = "root" | "db" | "files" | "config" | "logs" | "backups" | "tmp";
+type BackupKindName =
+  | "auto"
+  | "manual"
+  | "pre-migrate"
+  | "pre-restore"
+  | "pre-import"
+  | "pre-reset"
+  | "pre-update";
+
+interface IdleState {
+  active: boolean;
+  tag: string | null;
+}
+
+interface AiConfigView {
+  baseUrl: string;
+  model: string;
+  hasApiKey: boolean;
+  keyState: "ok" | "missing" | "undecryptable" | "plaintext";
+  keyEncrypted: boolean;
+}
+
+interface AppInfoView {
+  version: string;
+  schemaVersion: number;
+  currentSchemaVersion: number;
+  dataRoot: string;
+  userData: string;
+  packaged: boolean;
+  maintenance: boolean;
+}
+
+interface BackupEntryView {
+  id: string;
+  fileName: string;
+  filePath: string;
+  kind: BackupKindName;
+  sizeBytes: number;
+  createdAt: string;
+  appVersion: string;
+  schemaVersion: number;
+}
+
+interface DatabaseCheckView {
+  ok: boolean;
+  messages: string[];
+  mode: "quick" | "full";
+  durationMs: number;
+}
+
+interface IntegrityIssueView {
+  kind: string;
+  count: number;
+  samples: string[];
+  hint: string;
+}
+
+interface DataHealthView {
+  appVersion: string;
+  schemaVersion: number;
+  currentSchemaVersion: number;
+  minReaderVersion: string | null;
+  installId: string | null;
+  dataRoot: string;
+  firstRunCompleted: boolean;
+  lastBackupAt: string | null;
+  lastRestoreAt: string | null;
+  lastMigration: { from: number; to: number; at: string; backup: string | null } | null;
+  sizes: { db: number; files: number; logs: number; backups: number; total: number };
+  counts: { projects: number; requirements: number; items: number; attachments: number; sessions: number };
+  backups: { count: number; latestAt: string | null; latestFile: string | null };
+  integrity: DatabaseCheckView | null;
+}
+
 interface Window {
+  ipcRenderer: {
+    on(channel: string, listener: (event: unknown, ...args: unknown[]) => void): () => void;
+    off(channel: string, listener: (...args: unknown[]) => void): void;
+    send(channel: string, ...args: unknown[]): void;
+    invoke(channel: string, ...args: unknown[]): Promise<unknown>;
+  };
   api: {
     getPathForFile(file: File): string;
     project: {
@@ -24,7 +106,7 @@ interface Window {
       import(sourcePath: string, pj: string, req: string, userId: string): Promise<AttachmentRow>;
       replace(sourcePath: string, pj: string, req: string, userId: string): Promise<AttachmentRow>;
       list(pj: string, req: string): Promise<AttachmentRow[]>;
-      delete(hash: string): Promise<DeleteResult>;
+      delete(pj: string, req: string, hash: string): Promise<DeleteResult>;
       open(relativePath: string): Promise<string>;
       saveAs(relativePath: string, defaultName: string): Promise<boolean>;
       getDataUrl(relativePath: string): Promise<string | null>;
@@ -32,12 +114,33 @@ interface Window {
     ai: {
       parseDocx(filePath: string): Promise<ParseDocxResult>;
       testConnection(): Promise<{ ok: boolean; message: string }>;
+      status(): Promise<{ configured: boolean }>;
       config: {
-        get(): Promise<Record<string, string> | null>;
-        save(data: Record<string, string>): Promise<void>;
+        get(): Promise<AiConfigView>;
+        save(data: { baseUrl: string; model: string; apiKey?: string | null }): Promise<void>;
       };
       search(sessionId: string, prompt: string, projectCode: string | undefined, onChunk: (chunk: string) => void): Promise<void>;
       deleteSession(sessionId: string): Promise<void>;
+    };
+    app: {
+      info(): Promise<AppInfoView>;
+      openDataDir(sub?: DataSubDirName): Promise<string>;
+      openLog(): Promise<string>;
+      onMaintenance(listener: (state: IdleState) => void): () => void;
+    };
+    data: {
+      health(check?: boolean): Promise<DataHealthView>;
+      checkIntegrity(): Promise<{ check: DatabaseCheckView; issues: IntegrityIssueView[] }>;
+      gcOrphanFiles(dryRun?: boolean): Promise<{ count: number; bytes: number; samples: string[] }>;
+      reset(scope: "business" | "factory", confirm: string): Promise<{ backupId: string }>;
+    };
+    backup: {
+      list(): Promise<BackupEntryView[]>;
+      create(label?: string): Promise<BackupEntryView>;
+      prune(): Promise<{ removed: number }>;
+      delete(id: string): Promise<{ ok: boolean }>;
+      restore(id: string): Promise<{ ok: boolean; preBackup: string | null; schemaVersion: number; restarting: boolean }>;
+      saveAs(id: string, defaultName?: string): Promise<{ ok: boolean; path?: string }>;
     };
   };
 }

@@ -5,12 +5,19 @@
   "asar": true,
   "productName": "TBM Lite",
   "directories": {
-    "output": "release/${version}"
+    "output": "release/${version}",
+    "buildResources": "build"
   },
   "files": [
     "dist",
     "dist-electron"
   ],
+  // @libsql 带原生模块（win32-x64-msvc/*.node），必须解包到 asar 之外，否则打包后加载失败
+  "asarUnpack": [
+    "**/node_modules/@libsql/**",
+    "**/*.node"
+  ],
+  // 安装种子：仅模板/默认值，绝不放真实密钥
   "extraResources": [
     {
       "from": "electron/app-data/publish",
@@ -26,12 +33,30 @@
         ]
       }
     ],
-    "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
+    "artifactName": "${productName}-Windows-${version}-Setup.${ext}",
+    // 未签名阶段只能关闭更新包签名校验（会降低更新安全性），拿到证书后改回 true
+    "verifyUpdateCodeSignature": false
   },
   "nsis": {
     "oneClick": false,
+    // 每用户安装：免管理员权限，静默自动更新才可用
     "perMachine": false,
+    "allowElevation": true,
     "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false
-  }
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "TBM Lite",
+    "uninstallDisplayName": "TBM Lite ${version}",
+    // 卸载默认保留用户数据（data 目录由用户显式删除）
+    "deleteAppDataOnUninstall": false,
+    "differentialPackage": true
+  },
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "luyaogod",
+      "repo": "TbmLite",
+      "releaseType": "release"
+    }
+  ]
 }

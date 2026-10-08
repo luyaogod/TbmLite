@@ -1,21 +1,21 @@
 import { sql } from "drizzle-orm";
-import { db } from "./index";
-import logger from "../utils/logger";
+import type { Migration } from "./types";
 
-/**
- * 启动时执行建表 DDL（幂等），无需单独的迁移工具链。
- */
-export async function migrate(): Promise<void> {
-  const statements = [
-    sql`CREATE TABLE IF NOT EXISTS pjaa (
+/** 基线：4 张业务表（等价于 0.1.x 的启动建表 DDL，保持幂等） */
+export const migration001Init: Migration = {
+  version: 1,
+  name: "init",
+  async up({ db }) {
+    await db.run(sql`CREATE TABLE IF NOT EXISTS pjaa (
       pjaa001 TEXT PRIMARY KEY NOT NULL,
       pjaa002 TEXT NOT NULL,
       pjaacrtdt TEXT NOT NULL,
       pjaacrtid TEXT NOT NULL,
       pjaamoddt TEXT NOT NULL,
       pjaamodit TEXT NOT NULL
-    )`,
-    sql`CREATE TABLE IF NOT EXISTS xqaa_t (
+    )`);
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS xqaa_t (
       xqaapj TEXT NOT NULL,
       xqaa001 TEXT NOT NULL,
       xqaa002 TEXT NOT NULL,
@@ -27,8 +27,9 @@ export async function migrate(): Promise<void> {
       xqaamoddt TEXT NOT NULL,
       xqaamodit TEXT NOT NULL,
       PRIMARY KEY (xqaapj, xqaa001)
-    )`,
-    sql`CREATE TABLE IF NOT EXISTS xqab_t (
+    )`);
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS xqab_t (
       xqabpj TEXT NOT NULL,
       xqab001 TEXT NOT NULL,
       xqabseq TEXT NOT NULL,
@@ -43,8 +44,9 @@ export async function migrate(): Promise<void> {
       xqabmoddt TEXT NOT NULL,
       xqabmodit TEXT NOT NULL,
       PRIMARY KEY (xqabpj, xqab001, xqabseq)
-    )`,
-    sql`CREATE TABLE IF NOT EXISTS ffff_t (
+    )`);
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS ffff_t (
       ffff001 TEXT NOT NULL,
       ffff002 TEXT NOT NULL,
       ffff003 TEXT NOT NULL,
@@ -54,11 +56,6 @@ export async function migrate(): Promise<void> {
       ffffcrtdt TEXT NOT NULL,
       ffffecrtid TEXT NOT NULL,
       ffffstus INTEGER NOT NULL
-    )`,
-  ];
-
-  for (const statement of statements) {
-    await db.run(statement);
-  }
-  logger.info("数据库初始化完成");
-}
+    )`);
+  },
+};

@@ -80,8 +80,9 @@ contextBridge.exposeInMainWorld("api", {
     list(pj: string, req: string) {
       return ipcRenderer.invoke("attachment:list", pj, req);
     },
-    delete(hash: string) {
-      return ipcRenderer.invoke("attachment:delete", hash);
+    /** 按归属删除引用（同一物理文件仍被其他需求书引用时不会删文件） */
+    delete(pj: string, req: string, hash: string) {
+      return ipcRenderer.invoke("attachment:delete", pj, req, hash);
     },
     open(relativePath: string) {
       return ipcRenderer.invoke("attachment:open", relativePath);
@@ -101,11 +102,14 @@ contextBridge.exposeInMainWorld("api", {
     testConnection() {
       return ipcRenderer.invoke("ai:test-connection");
     },
+    status() {
+      return ipcRenderer.invoke("ai:status");
+    },
     config: {
       get() {
         return ipcRenderer.invoke("ai:config:get");
       },
-      save(data: Record<string, string>) {
+      save(data: { baseUrl: string; model: string; apiKey?: string | null }) {
         return ipcRenderer.invoke("ai:config:save", data);
       },
     },
@@ -132,6 +136,60 @@ contextBridge.exposeInMainWorld("api", {
     },
     deleteSession(sessionId: string) {
       return ipcRenderer.invoke("ai:delete-session", sessionId);
+    },
+  },
+
+  app: {
+    info() {
+      return ipcRenderer.invoke("app:info");
+    },
+    openDataDir(sub?: "root" | "db" | "files" | "config" | "logs" | "backups" | "tmp") {
+      return ipcRenderer.invoke("app:open-data-dir", sub);
+    },
+    openLog() {
+      return ipcRenderer.invoke("app:open-log");
+    },
+    /** 订阅维护状态（恢复/重置期间 UI 应禁用写操作） */
+    onMaintenance(listener: (state: { active: boolean; tag: string | null }) => void) {
+      const handler = (_e: unknown, state: { active: boolean; tag: string | null }) => listener(state);
+      ipcRenderer.on("maintenance:state", handler);
+      return () => ipcRenderer.off("maintenance:state", handler);
+    },
+  },
+
+  data: {
+    health(check?: boolean) {
+      return ipcRenderer.invoke("data:health", check);
+    },
+    checkIntegrity() {
+      return ipcRenderer.invoke("data:check-integrity");
+    },
+    gcOrphanFiles(dryRun?: boolean) {
+      return ipcRenderer.invoke("data:gc-orphan-files", dryRun);
+    },
+    reset(scope: "business" | "factory", confirm: string) {
+      return ipcRenderer.invoke("data:reset", scope, confirm);
+    },
+  },
+
+  backup: {
+    list() {
+      return ipcRenderer.invoke("backup:list");
+    },
+    create(label?: string) {
+      return ipcRenderer.invoke("backup:create", label);
+    },
+    prune() {
+      return ipcRenderer.invoke("backup:prune");
+    },
+    delete(id: string) {
+      return ipcRenderer.invoke("backup:delete", id);
+    },
+    restore(id: string) {
+      return ipcRenderer.invoke("backup:restore", id);
+    },
+    saveAs(id: string, defaultName?: string) {
+      return ipcRenderer.invoke("backup:save-as", id, defaultName);
     },
   },
 });

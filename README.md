@@ -18,7 +18,8 @@
 | 桌面框架 | Electron 30 |
 | UI | shadcn/ui（new-york + Radix）+ Tailwind CSS v4 + lucide-react |
 | 构建 | Vite 5 + vite-plugin-electron |
-| 数据库 | SQLite（@libsql/client + drizzle-orm），启动时幂等建表 |
+| 数据库 | SQLite（@libsql/client + drizzle-orm），迁移框架 + WAL + 外键，启动时按 `user_version` 演进 |
+| 数据安全 | 滚动自动备份（`VACUUM INTO`）+ 一键备份/恢复、API Key 经 safeStorage(DPAPI) 加密、日志脱敏 |
 | AI | openai SDK（OpenAI 兼容接口）+ @jose.espana/docstream（.docx → Markdown） |
 | Markdown | react-markdown + remark-gfm |
 
@@ -27,29 +28,38 @@
 ```
 TbmLite/
 ├── electron/                        # Electron 主进程
-│   ├── main.ts                      # 窗口创建 + 启动建表 + 注册 IPC
+│   ├── main.ts                      # 单实例锁 + 启动编排（门禁 → PRAGMA → 迁移 → 备份 → 清理）+ 自检模式
 │   ├── preload.ts                   # contextBridge：window.api
-│   ├── ipc.ts                       # 全部 ipcMain.handle 集中注册
-│   ├── db/                          # schema.ts（4 张表）+ migrate.ts（幂等 DDL）
-│   ├── services/                    # project / requirement / attachment / agent
+│   ├── ipc.ts                       # 全部 ipcMain.handle 集中注册（写操作带维护态校验）
+│   ├── db/
+│   │   ├── index.ts                 # 懒加载 libsql 连接 + PRAGMA 基线（WAL/busy_timeout/foreign_keys）
+│   │   ├── schema.ts                # 4 张表定义
+│   │   └── migrations/              # 迁移框架：index.ts(runner) + 001~004
 │   ├── core/
+│   │   ├── meta.ts                  # .meta.json（installId / schemaVersion / minReaderVersion / cleanExit）
+│   │   ├── data-guard.ts            # 版本门禁与损坏探测
+│   │   ├── backup-service(services/) # VACUUM INTO 备份 + 保留策略 + 两阶段恢复
+│   │   ├── integrity.ts             # 完整性校验 + 悬挂引用/孤立文件巡检 + GC
+│   │   ├── housekeeping.ts          # tmp / 会话 / 回收站清理
+│   │   ├── maintenance.ts           # 备份·恢复·迁移·重置 独占队列 + 维护态广播
 │   │   ├── agent/                   # docx-parser（AI 提取）、search-agent（流式问答）、session-store、config
 │   │   └── constants.ts             # 状态码（与原 TBM sscc 一致）
-│   └── utils/                       # paths、logger
+│   ├── services/                    # project / requirement / attachment / agent / backup / data
+│   ├── utils/                       # paths（数据目录）、safe-path（越界拦截）、fsx、sqlite-header、logger
+│   └── app-data/                    # 仅开发态数据目录 + 安装种子（publish，无真实密钥）
 ├── src/
 │   ├── components/
 │   │   ├── ui/                      # shadcn/ui 组件
 │   │   ├── layout/                  # AppShell（侧边导航）、PageHeader
+│   │   ├── data/                    # 数据与备份面板
 │   │   ├── projects/                # 项目对话框
 │   │   └── requirements/            # 需求书上传对话框（.docx AI 解析）
-│   └── pages/
-│       ├── projects-page.tsx        # 项目管理
-│       ├── requirements-page.tsx    # 需求书列表
-│       ├── requirement-detail-page.tsx  # 需求书详情（主档/附件/明细，开发人员姓名直填）
-│       ├── ai-search-page.tsx       # AI 搜索（流式聊天）
-│       └── settings-page.tsx        # AI API 配置
-├── electron/app-data/dev/           # 开发态数据目录（db / files / config / logs）
-└── drizzle.config.ts                # 供 drizzle-kit 使用（可选）
+│   └── pages/                       # 项目 / 需求书 / 详情 / AI 搜索 / 设置
+├── scripts/
+│   ├── lib/paths.ts                 # 脚本共用的数据目录解析
+│   ├── migrate-from-tbm.ts          # 旧 TBM 数据导入（支持 --from/--to/--dry-run）
+│   └── verify-migration.ts          # 数据校验（支持 --dir）
+└── docs/数据管理-安装-更新-方案.md   # 数据/安装/更新设计文档
 ```
 
 ## 数据库表
@@ -59,7 +69,7 @@ TbmLite/
 | pjaa | 项目 | pjaa001 |
 | xqaa_t | 需求书主档 | (xqaapj, xqaa001) |
 | xqab_t | 需求书明细 | (xqabpj, xqab001, xqabseq)，xqab006 为开发人员姓名（自由文本） |
-| ffff_t | 附件 | ffff004 |
+| ffff_t | 附件 | (ffff001, ffff002, ffff004) —— 内容寻址 + 引用模型，同一文件可被多份需求书引用 |
 
 状态码沿用原 TBM sscc 分类码：需求书 `1 进行中 / 2 已结案`；需求项 `1 需求评估 / 2 需求开发 / 3 顾问确认 / 4 用户确认 / 5 已结案`。
 
@@ -72,18 +82,55 @@ npm run build      # 构建（tsc + vite build → dist / dist-electron）
 npm run dist       # 打包安装包（electron-builder）
 ```
 
-首次使用前，进入「设置」页填写 AI API 配置（OpenAI 兼容接口，默认 DeepSeek），
-配置文件保存于应用数据目录 `config/aj-api.json`。也可以直接编辑
-`electron/app-data/dev/config/aj-api.json`。
+首次使用前，进入「设置」页填写 AI API 配置（OpenAI 兼容接口，默认 DeepSeek）。
+API Key 经系统安全存储（Windows DPAPI）加密后写入数据目录 `config/aj-api.json`；
+留空保存表示保持原 Key 不变。仓库内只提供 `aj-api.example.json` 模板，**不含任何真实密钥**。
+
+### 数据自检（无界面）
+
+```powershell
+npx electron . --tbm-smoke        # 输出 SMOKE_REPORT JSON，退出码 0/1
+```
+
+自检会完整跑一遍数据层：门禁 → 迁移（含迁移前备份）→ 每日备份 → 备份恢复往返 →
+完整性检查 + 一致性巡检。可用 `TBM_DATA_DIR` 指向数据目录副本，避免影响正式数据：
+
+```powershell
+$env:TBM_DATA_DIR="D:\tmp\tbm-data"; npx electron . --tbm-smoke
+```
+
+## 数据、备份与恢复
+
+用户数据位于 `%APPDATA%\TBM Lite`（便携模式：exe 同级 `portable` 标记文件 → `exe 同级/data`；
+也可用 `TBM_DATA_DIR` 覆盖）。程序升级只覆盖安装资源，不会触碰该目录。
+
+```
+%APPDATA%\TBM Lite\
+├── .meta.json      # 安装标识 / 结构版本 / 最低可读版本 / 正常退出标记
+├── db\app.db       # SQLite（WAL）
+├── files\          # 附件（sha256 内容寻址，删除进 files/.trash）
+├── config\         # aj-api.json（Key 已加密）、app 偏好、AI 会话
+├── logs\           # app.log（5MB×5 轮转）、audit.log（删除/恢复/重置审计）
+├── backups\auto    # 滚动自动备份（每日 1 份 / 30 天 / 上限 20）
+└── backups\manual  # 手动备份（不自动清理）
+```
+
+- 备份使用 `VACUUM INTO`（SQLite 官方一致性热备），**不要**用文件拷贝代替——WAL 模式下会丢数据。
+- 恢复为两阶段：先在设置页确认 → 自动生成 `pre-restore` 副本 → 应用自动重启并在建库连接前完成换库。
+- 结构版本（`PRAGMA user_version`）高于程序支持版本，或低于 `.meta.json:minReaderVersion` 时，程序**拒绝写入**并给出「退出 / 从备份恢复 / 打开数据目录」三个选择。
+- 设置页「数据与备份」可查看占用、立即备份、恢复、另存为、完整性检查、清理孤立附件、重置数据。
 
 ## 数据迁移（从旧 TBM）
 
 ```powershell
-npx tsx scripts/migrate-from-tbm.ts   # 迁移旧库数据（幂等，可重复执行）
-npx tsx scripts/verify-migration.ts   # 校验迁移完整性
+npx tsx scripts/migrate-from-tbm.ts --from <旧数据目录> --to <新数据目录> [--dry-run]
+npx tsx scripts/verify-migration.ts --dir <新数据目录>
 ```
 
-脚本从 `../TBM/electron/app-data/dev` 读取旧库，迁移范围：
+目录也可用环境变量 `TBM_OLD_DATA` / `TBM_NEW_DATA` 指定；默认值分别为
+`../TBM/electron/app-data/dev` 与 `electron/app-data/dev`。
+
+脚本从旧数据目录读取旧库（需先启动一次 TBM Lite 让新库建表），迁移范围：
 
 | 数据 | 是否迁移 |
 |---|---|
@@ -94,12 +141,19 @@ npx tsx scripts/verify-migration.ts   # 校验迁移完整性
 | xqac_t 待办及其附件 | ❌ 新项目已移除待办功能 |
 | sscc / zjac / seus / 用户等 | ❌ 未使用 |
 
-执行前会自动备份新库（`app.db.bak-<时间戳>`）。
+执行前会自动用 `VACUUM INTO` 备份新库（`db/app.db.bak-<时间戳>`），迁移过程幂等、可重复执行。
 
 ## 与原 TBM 的差异
 
 - UI 由 antd 重写为 shadcn/ui（无圆角直角设计），去掉多标签页 / KeepAlive / 过滤 store 等复杂机制
 - 移除：工作台、进度看板、需求明细列表、待办事项报表、需求项详情、文档预览窗口、惯用待办、用户设置等页面
 - 开发人员不再单独建目录维护，需求明细中直接填写姓名（原版为「开发人」文本字段，同样直填）
-- 附件仅保留需求书级（xqaa_t），文件按 sha256 去重存放于 `files/xqaa_t/`
+- 附件仅保留需求书级（xqaa_t），文件按 sha256 内容寻址存放于 `files/xqaa_t/`
 - AI 搜索上下文从「需求书+明细+待办」精简为「项目+需求书+明细+附件名」
+- 新增数据治理能力：迁移框架、版本门禁、滚动备份与一键恢复、完整性巡检/孤立文件回收、重置数据
+
+## 已知限制
+
+- 未接入自动更新（electron-updater 与发版流水线为下一阶段）；目前通过重新安装安装包升级。
+- 安装包尚未代码签名，Windows SmartScreen 会提示未知发布者。
+- 备份只包含数据库；附件为只增不改的内容寻址文件，删除时进 `files/.trash`（7 天后清理）。

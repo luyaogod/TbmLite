@@ -298,7 +298,7 @@ export function RequirementDetailPage() {
   const confirmDeleteAttachment = async () => {
     if (!deletingAttachment) return;
     try {
-      const result = await window.api.attachment.delete(deletingAttachment.ffff004);
+      const result = await window.api.attachment.delete(deletingAttachment.ffff002.split("|")[0], pj, deletingAttachment.ffff004);
       if (result.ok) {
         toast.success("附件已删除");
         await loadAll();

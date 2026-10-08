@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathManager } from "../../utils/paths";
+import { rmIfExists, writeJsonAtomic } from "../../utils/fsx";
 import logger from "../../utils/logger";
 
 export interface ChatMessage {
@@ -18,7 +19,7 @@ export interface ChatSession {
 }
 
 function sessionsDir(): string {
-  const dir = path.join(pathManager.getConfigPath(), "chat-sessions");
+  const dir = pathManager.getSessionsPath();
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -30,7 +31,7 @@ function filePath(sessionId: string): string {
 export const sessionStore = {
   save(session: ChatSession): void {
     try {
-      fs.writeFileSync(filePath(session.sessionId), JSON.stringify(session, null, 2), "utf-8");
+      writeJsonAtomic(filePath(session.sessionId), session);
       logger.debug({ sessionId: session.sessionId, turns: session.messages.length / 2 }, "会话已保存");
     } catch (e) {
       logger.error({ sessionId: session.sessionId, error: String(e) }, "会话保存失败");
@@ -51,8 +52,7 @@ export const sessionStore = {
 
   delete(sessionId: string): void {
     try {
-      const p = filePath(sessionId);
-      if (fs.existsSync(p)) fs.unlinkSync(p);
+      rmIfExists(filePath(sessionId));
       logger.debug({ sessionId }, "会话已删除");
     } catch (e) {
       logger.error({ sessionId, error: String(e) }, "会话删除失败");

@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/index";
-import { xqaa_t, xqab_t } from "../db/schema";
-import { attachmentService } from "./attachment-service";
+import { ffff_t, xqaa_t, xqab_t } from "../db/schema";
+import { attachmentService, attachmentOwnerKey, validateKeyPart } from "./attachment-service";
 import logger from "../utils/logger";
 
 export interface RequirementRow {
@@ -119,44 +119,49 @@ export async function createRequirement(
   items: RequirementItemInput[],
   userId: string,
 ): Promise<void> {
+  validateKeyPart(master.xqaapj, "项目编号");
+  validateKeyPart(master.xqaa001, "需求书编号");
   const today = new Date().toISOString().slice(0, 10);
 
-  await db
-    .insert(xqaa_t)
-    .values({
-      xqaapj: master.xqaapj,
-      xqaa001: master.xqaa001,
-      xqaa002: master.xqaa002,
-      xqaa003: master.xqaa003,
-      xqaa004: master.xqaa004,
-      xqaa005: master.xqaa005 ?? "",
-      xqaacrtdt: today,
-      xqaacrtid: userId,
-      xqaamoddt: today,
-      xqaamodit: userId,
-    })
-    .run();
-
-  for (const item of items) {
-    await db
-      .insert(xqab_t)
+  // 主档 + 明细必须原子写入，避免中途失败留下半份需求书
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(xqaa_t)
       .values({
-        xqabpj: master.xqaapj,
-        xqab001: master.xqaa001,
-        xqabseq: item.seq,
-        xqab002: item.description,
-        xqab003: item.jobCode,
-        xqab004: item.hours,
-        xqab005: item.status || "1",
-        xqab006: item.developer ?? "",
-        xqab007: item.jobName ?? "",
-        xqabcrtdt: today,
-        xqabcrtid: userId,
-        xqabmoddt: today,
-        xqabmodit: userId,
+        xqaapj: master.xqaapj,
+        xqaa001: master.xqaa001,
+        xqaa002: master.xqaa002,
+        xqaa003: master.xqaa003,
+        xqaa004: master.xqaa004,
+        xqaa005: master.xqaa005 ?? "",
+        xqaacrtdt: today,
+        xqaacrtid: userId,
+        xqaamoddt: today,
+        xqaamodit: userId,
       })
       .run();
-  }
+
+    for (const item of items) {
+      await tx
+        .insert(xqab_t)
+        .values({
+          xqabpj: master.xqaapj,
+          xqab001: master.xqaa001,
+          xqabseq: item.seq,
+          xqab002: item.description,
+          xqab003: item.jobCode,
+          xqab004: item.hours,
+          xqab005: item.status || "1",
+          xqab006: item.developer ?? "",
+          xqab007: item.jobName ?? "",
+          xqabcrtdt: today,
+          xqabcrtid: userId,
+          xqabmoddt: today,
+          xqabmodit: userId,
+        })
+        .run();
+    }
+  });
   logger.info({ xqaapj: master.xqaapj, xqaa001: master.xqaa001, items: items.length }, "创建需求书");
 }
 
@@ -193,35 +198,38 @@ export async function syncItems(
   userId: string,
 ): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
-  await db
-    .delete(xqab_t)
-    .where(and(eq(xqab_t.xqabpj, xqaapj), eq(xqab_t.xqab001, xqaa001)))
-    .run();
-  for (const item of rows) {
-    await db
-      .insert(xqab_t)
-      .values({
-        xqabpj: xqaapj,
-        xqab001: xqaa001,
-        xqabseq: item.seq,
-        xqab002: item.description,
-        xqab003: item.jobCode,
-        xqab004: item.hours,
-        xqab005: item.status || "1",
-        xqab006: item.developer ?? "",
-        xqab007: item.jobName ?? "",
-        xqabcrtdt: today,
-        xqabcrtid: userId,
-        xqabmoddt: today,
-        xqabmodit: userId,
-      })
+  // 全量替换：删除 + 重建 + 主档时间戳必须原子
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(xqab_t)
+      .where(and(eq(xqab_t.xqabpj, xqaapj), eq(xqab_t.xqab001, xqaa001)))
       .run();
-  }
-  await db
-    .update(xqaa_t)
-    .set({ xqaamoddt: today, xqaamodit: userId })
-    .where(and(eq(xqaa_t.xqaapj, xqaapj), eq(xqaa_t.xqaa001, xqaa001)))
-    .run();
+    for (const item of rows) {
+      await tx
+        .insert(xqab_t)
+        .values({
+          xqabpj: xqaapj,
+          xqab001: xqaa001,
+          xqabseq: item.seq,
+          xqab002: item.description,
+          xqab003: item.jobCode,
+          xqab004: item.hours,
+          xqab005: item.status || "1",
+          xqab006: item.developer ?? "",
+          xqab007: item.jobName ?? "",
+          xqabcrtdt: today,
+          xqabcrtid: userId,
+          xqabmoddt: today,
+          xqabmodit: userId,
+        })
+        .run();
+    }
+    await tx
+      .update(xqaa_t)
+      .set({ xqaamoddt: today, xqaamodit: userId })
+      .where(and(eq(xqaa_t.xqaapj, xqaapj), eq(xqaa_t.xqaa001, xqaa001)))
+      .run();
+  });
   logger.info({ xqaapj, xqaa001, items: rows.length }, "同步需求书明细");
 }
 
@@ -250,20 +258,42 @@ export async function updateItem(
 
 // ── 删除（级联明细 + 附件） ─────────────────────────────
 
+/**
+ * 删除需求书：数据库三层删除在同一事务内完成，事务提交后再回收物理文件。
+ * 若进程在回收前中断，只会留下孤立文件（由一致性巡检 / GC 处理），不会产生悬挂引用。
+ */
 export async function deleteRequirement(
   xqaapj: string,
   xqaa001: string,
 ): Promise<DeleteResult> {
-  await db
-    .delete(xqab_t)
-    .where(and(eq(xqab_t.xqabpj, xqaapj), eq(xqab_t.xqab001, xqaa001)))
-    .run();
-  await attachmentService.deleteByKey("xqaa_t", `${xqaapj}|${xqaa001}`);
-  await db
-    .delete(xqaa_t)
-    .where(and(eq(xqaa_t.xqaapj, xqaapj), eq(xqaa_t.xqaa001, xqaa001)))
-    .run();
-  logger.info({ xqaapj, xqaa001 }, "删除需求书（级联）");
+  const existing = await getRequirement(xqaapj, xqaa001);
+  if (!existing) return { ok: false, reason: "需求书不存在" };
+
+  const ownerKey = attachmentOwnerKey(xqaapj, xqaa001);
+  const refs = await attachmentService.xqaa.list(xqaapj, xqaa001);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(xqab_t)
+      .where(and(eq(xqab_t.xqabpj, xqaapj), eq(xqab_t.xqab001, xqaa001)))
+      .run();
+    await tx
+      .delete(ffff_t)
+      .where(and(eq(ffff_t.ffff001, "xqaa_t"), eq(ffff_t.ffff002, ownerKey)))
+      .run();
+    await tx
+      .delete(xqaa_t)
+      .where(and(eq(xqaa_t.xqaapj, xqaapj), eq(xqaa_t.xqaa001, xqaa001)))
+      .run();
+  });
+
+  const retired = await attachmentService.retireFiles(refs.map((row) => row.ffff003));
+  logger.audit({
+    action: "delete-requirement",
+    target: ownerKey,
+    detail: { attachments: refs.length, retiredFiles: retired },
+    result: "ok",
+  });
   return { ok: true };
 }
 

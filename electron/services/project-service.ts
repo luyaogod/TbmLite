@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "../db/index";
 import { pjaa, xqaa_t } from "../db/schema";
+import { validateKeyPart } from "./attachment-service";
 import logger from "../utils/logger";
 
 export interface ProjectRow {
@@ -34,6 +35,9 @@ export async function getProject(pjaa001: string): Promise<ProjectRow | null> {
 }
 
 export async function createProject(row: ProjectRow): Promise<void> {
+  validateKeyPart(row.pjaa001, "项目编号");
+  const existing = await getProject(row.pjaa001);
+  if (existing) throw new Error(`项目编号 ${row.pjaa001} 已存在`);
   await db.insert(pjaa).values(row).run();
   logger.info({ pjaa001: row.pjaa001 }, "创建项目");
 }
@@ -65,7 +69,7 @@ export async function deleteProject(pjaa001: string): Promise<DeleteResult> {
     };
   }
   await db.delete(pjaa).where(eq(pjaa.pjaa001, pjaa001)).run();
-  logger.info({ pjaa001 }, "删除项目");
+  logger.audit({ action: "delete-project", target: pjaa001, result: "ok" });
   return { ok: true };
 }
 

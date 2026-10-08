@@ -8,3 +8,15 @@ electron/app-data/dev/db
 electron/app-data/dev/files
 electron/app-data/dev/logs
 electron/app-data/dev/config/chat-sessions
+
+# 隐私 / 密钥
+electron/app-data/**/config/aj-api.json
+electron/app-data/**/db/
+electron/app-data/**/files/
+electron/app-data/**/logs/
+electron/app-data/**/config/chat-sessions/
+electron/app-data/**/.meta.json
+electron/app-data/**/backups/
+
+# 本地实现临时目录
+.tmp-impl/

@@ -1,6 +1,6 @@
 import { parseDocx, extractRequirement, type ParseDocxResult, type RequirementExtraction } from "../core/agent/docx-parser";
 import { runSearchWithSession, deleteSession, testConnection } from "../core/agent/search-agent";
-import { loadConfig, readRawConfig, saveRawConfig } from "../core/agent/config";
+import { getConfigForUi, loadConfig, saveRawConfig, isConfigured, type SaveConfigInput } from "../core/agent/config";
 
 export const agentService = {
   /** 解析 .docx 并通过 AI 提取需求书结构 */
@@ -26,8 +26,13 @@ export const agentService = {
     return testConnection();
   },
 
-  getConfig(): Record<string, string> | null {
-    return readRawConfig();
+  /** 供设置页展示：不含明文 Key */
+  getConfig() {
+    return getConfigForUi();
+  },
+
+  isConfigured(): boolean {
+    return isConfigured();
   },
 
   getEffectiveConfig() {
@@ -38,7 +43,7 @@ export const agentService = {
     }
   },
 
-  saveConfig(data: Record<string, string>): void {
+  saveConfig(data: SaveConfigInput): void {
     saveRawConfig(data);
   },
 };
