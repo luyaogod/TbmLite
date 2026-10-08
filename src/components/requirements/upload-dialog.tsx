@@ -80,6 +80,7 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
   const [parsing, setParsing] = useState(false);
   const [docxPath, setDocxPath] = useState<string | null>(null);
   const [docxName, setDocxName] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -118,6 +119,7 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
       setParsing(false);
       setDocxPath(null);
       setDocxName(null);
+      setDragging(false);
       void loadOptions();
     }
   }, [open, form, loadOptions]);
@@ -165,6 +167,13 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
       setParsing(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  /** 拖拽/选择共用入口：只接受单个 .docx */
+  const handleDroppedFiles = (files: FileList | null | undefined) => {
+    if (parsing || !files || files.length === 0) return;
+    if (files.length > 1) toast.warning("一次只能解析一个文件，已使用第一个");
+    void handleParseFile(files[0]);
   };
 
   const updateItem = (key: number, field: keyof ItemDraft, value: unknown) => {
@@ -234,15 +243,15 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl">
-        <DialogHeader>
+      <DialogContent className="flex h-[min(92vh,900px)] w-[min(1200px,95vw)] max-w-none flex-col gap-4 sm:max-w-none">
+        <DialogHeader className="shrink-0">
           <DialogTitle>新增需求书</DialogTitle>
           <DialogDescription>
             上传 .docx 需求确认书，AI 将自动提取需求书编号与需求明细；也可以手动维护明细
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid max-h-[calc(100vh-16rem)] grid-cols-1 gap-4 overflow-y-auto pr-1">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto pr-1">
           {/* 主档表单 + 上传 */}
           <Form {...form}>
             <form id="requirement-master-form" onSubmit={form.handleSubmit(onSubmit)}>
@@ -336,29 +345,63 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
                 />
                 <div className="flex flex-col gap-2">
                   <span className="text-sm font-medium leading-none">需求书文档</span>
-                  <button
-                    type="button"
-                    disabled={parsing}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-disabled={parsing}
                     onClick={() => fileInputRef.current?.click()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        fileInputRef.current?.click();
+                      }
+                    }}
+                    onDragEnter={(e) => {
+                      e.preventDefault();
+                      if (!parsing) setDragging(true);
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "copy";
+                      if (!parsing) setDragging(true);
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      setDragging(false);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDragging(false);
+                      handleDroppedFiles(e.dataTransfer?.files);
+                    }}
                     className={cn(
-                      "flex h-9 w-full items-center gap-2 border border-input bg-transparent px-3 text-sm transition-colors",
-                      docxName ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                      "flex min-h-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed px-3 py-2 text-center transition-colors outline-none",
+                      dragging
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-input hover:border-primary/60 hover:bg-accent/40 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
                       parsing && "cursor-wait opacity-60",
                     )}
                   >
-                    {parsing ? (
-                      <Loader2 className="size-4 shrink-0 animate-spin" />
-                    ) : (
-                      <FileUp className="size-4 shrink-0" />
-                    )}
-                    <span className="truncate">
-                      {parsing
-                        ? "AI 解析中…"
-                        : docxName
-                          ? `${docxName}（点击重选）`
-                          : "选择 .docx，AI 自动解析"}
+                    <span className="flex items-center gap-2 text-sm">
+                      {parsing ? (
+                        <Loader2 className="size-4 shrink-0 animate-spin" />
+                      ) : (
+                        <FileUp className="size-4 shrink-0" />
+                      )}
+                      <span className="truncate">
+                        {parsing
+                          ? "AI 解析中…"
+                          : docxName
+                            ? docxName
+                            : dragging
+                              ? "松开即开始解析"
+                              : "拖拽 .docx 到此处，或点击选择"}
+                      </span>
                     </span>
-                  </button>
+                    <span className="text-[11px] text-muted-foreground">
+                      {docxName ? "已选择，点击或拖入新文件可重选" : "AI 将自动提取需求书编号与需求明细"}
+                    </span>
+                  </div>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -387,9 +430,9 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
             </form>
           </Form>
 
-          {/* 明细列表 */}
-          <div>
-            <div className="mb-2 flex items-center justify-between">
+          {/* 明细列表：固定高度，内部自行滚动 */}
+          <div className="flex shrink-0 flex-col gap-2">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm font-medium">
                 需求明细
                 <Badge variant="secondary">{items.length}</Badge>
@@ -410,9 +453,9 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
               </div>
             </div>
 
-            <div>
-              <Table>
-                <TableHeader>
+            <div className="h-[260px] overflow-auto rounded-md border">
+              <Table containerClassName="overflow-visible">
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead className="w-12">项次</TableHead>
                     <TableHead className="min-w-56">需求描述</TableHead>
@@ -426,7 +469,7 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
                 <TableBody>
                   {items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-20 text-center text-muted-foreground">
+                      <TableCell colSpan={7} className="h-[216px] text-center text-muted-foreground">
                         暂无明细，上传 .docx 自动解析或点击「新增行」
                       </TableCell>
                     </TableRow>
@@ -550,7 +593,7 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             取消
           </Button>
