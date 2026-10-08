@@ -2,7 +2,7 @@
   "name": "tbm-lite",
   "productName": "TBM Lite",
   "private": true,
-  "version": "0.2.5",
+  "version": "0.2.6",
   "type": "module",
   "description": "TBM Lite - 需求书管理系统（shadcn/ui 重写版）：项目、需求书上传、开发人员维护、AI 搜索",
   "scripts": {
