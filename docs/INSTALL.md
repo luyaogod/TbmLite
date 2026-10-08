@@ -77,6 +77,10 @@ npm run dist         # electron-builder → release/<版本>/TBM Lite-Windows-<�
 | `nsis.differentialPackage: true` | 生成增量更新包（配合自动更新） |
 | `publish: github` | 发布渠道（`luyaogod/TbmLite`，仓库为 public，无需内置 Token） |
 | `extraResources: templates/` | 钉钉需求评估导入模板底稿（导出时以它为底，保留隐藏选项表与数据校验） |
+| 图标写入 | exe / 安装包图标需 rcedit。若网络无法下载 winCodeSign（electron-builder 会从 GitHub 拉取），用离线方式：
+① 先跑 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/patch-electron-exe.ps1`（自动从 electron-builder 缓存找 rcedit，给 Electron 的 exe 写入图标与版本信息）
+② 再跑 `npm run dist:offline`（等价于 `electron-builder -c.electronDist=node_modules/electron/dist -c.win.signAndEditExecutable=false`）
+注意：跳过 electron-builder 自带的 rcedit 后，必须由上面的补丁脚本负责写图标，否则 exe 会保留 Electron 默认图标 |
 | `package.json` 必须含 `productName` | Electron 用 `app.getName()`（= `productName`，回退到 `name`）决定 `userData`。缺失时数据目录会变成 `%APPDATA%\tbm-lite`，与文档/卸载脚本不一致 |
 | `win.verifyUpdateCodeSignature` | 未签名阶段必须为 `false`，签名后应改回 `true` |
 

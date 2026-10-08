@@ -9,7 +9,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "dist": "npm run build && electron-builder",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dist:offline": "npm run build && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/patch-electron-exe.ps1 && electron-builder -c.electronDist=node_modules/electron/dist -c.win.signAndEditExecutable=false"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
