@@ -88,7 +88,13 @@ export function AppShell() {
 
   return (
     <div ref={shellRef} className="flex h-screen w-full flex-col overflow-hidden bg-background">
-      {frameless ? <div className="titlebar-drag h-8 shrink-0 border-b bg-background" /> : null}
+      {/* 拖拽标题带：32px 为系统窗口按钮覆盖区，分割线单独放在其下方（下移 1px）避免被覆盖 */}
+      {frameless ? (
+        <>
+          <div className="titlebar-drag h-8 shrink-0 bg-background" />
+          <div className="h-px shrink-0 bg-border" />
+        </>
+      ) : null}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* 侧边导航 */}
